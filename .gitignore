@@ -1,1 +1,21 @@
-(empty)
+# System/Environment files
+.env
+.env.local
+*.env.*
+
+# Virtual environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Database dumps/artifacts
+dump.rdb
+
+# Test output
+test_output.txt
