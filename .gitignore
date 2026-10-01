@@ -13,6 +13,24 @@ venv/
 # Тестовые и локальные загрузки
 /data/uploads/
 
+# Кэш инструментов и тестов
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime-артефакты
+appendonly.aof
+*.log
+logs/
+test_output.txt
+
+# IDE
+.vscode/
+.idea/
+
 # Локальные артефакты (не для GitHub)
 dump.rdb
 *.rdb
