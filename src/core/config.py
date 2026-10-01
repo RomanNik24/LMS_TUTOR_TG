@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +26,11 @@ class Settings(BaseSettings):
 
     # URL публичного доступа к FastAPI (из него же строится ссылка Mini App)
     api_base_url: str = "http://127.0.0.1:8000"
+
+    # Публичный HTTPS-базовый URL Mini App (требование Telegram).
+    # Если задан — используется в web_app-кнопке напрямую; иначе URL
+    # выводится из api_base_url (для локальной разработки через туннель).
+    webapp_public_url: Optional[str] = None
 
     # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка)
     upload_dir: str = "data/uploads"
@@ -58,8 +64,13 @@ class Settings(BaseSettings):
 
     @property
     def webapp_url(self) -> str:
-        """URL Telegram Mini App (Flet), отдаваемый в кнопке web_app."""
-        return self.api_base_url.rstrip("/") + "/app"
+        """URL Telegram Mini App (Flet), отдаваемый в кнопке web_app.
+
+        В проде задайте WEBAPP_PUBLIC_URL (HTTPS-домен, требование Telegram);
+        локально URL выводится из API_BASE_URL (/app — прокси FastAPI).
+        """
+        base = self.webapp_public_url or self.api_base_url
+        return base.rstrip("/") + "/app"
 
 
 settings = Settings()

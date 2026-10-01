@@ -1,7 +1,9 @@
-# Compiled and build artifacts
+# Dependencies
+.venv/
+
+# Compiled files and caches
 __pycache__/
 *.pyc
 
-# Environment
-.env
-.env.local
+# Logs and data artifacts
+dump.rdb

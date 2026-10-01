@@ -13,7 +13,8 @@ from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 
-from src.bot.handlers.base import router
+from src.bot.handlers.base import router as base_router
+from src.bot.handlers.info import router as info_router
 from src.bot.middlewares.db import DbSessionMiddleware
 from src.core.config import logger, settings
 
@@ -48,8 +49,9 @@ async def main() -> None:
     # Подключаем Middleware для внедрения сессии БД во все обработчики
     dp.message.middleware(DbSessionMiddleware())
 
-    # Подключаем роутеры
-    dp.include_router(router)
+    # Подключаем роутеры (info раньше base: текстовые кнопки не перехватываются FSM-состояниями позже)
+    dp.include_router(info_router)
+    dp.include_router(base_router)
 
     logger.info("Запуск Telegram-бота...")
     await bot.delete_webhook(drop_pending_updates=True)

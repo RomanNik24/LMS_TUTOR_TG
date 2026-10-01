@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bot.states import LoginStates
-from src.bot.keyboards import get_main_keyboard
+from src.bot.keyboards import get_guest_keyboard, get_main_keyboard
 from src.services.auth import AuthService
 from src.repositories import UserRepository
 
@@ -25,7 +25,8 @@ async def cmd_start(message: Message, session: AsyncSession):
     else:
         await message.answer(
             "Добро пожаловать в MY_LMS!\n\n"
-            "Пожалуйста, авторизуйтесь с помощью команды /login или посмотрите список курсов (Каталог)."
+            "Пожалуйста, авторизуйтесь с помощью команды /login или посмотрите список курсов (Каталог).",
+            reply_markup=get_guest_keyboard(),
         )
 
 @router.message(Command("login"))

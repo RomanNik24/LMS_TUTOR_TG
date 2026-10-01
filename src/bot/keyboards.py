@@ -17,7 +17,24 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
                     web_app=WebAppInfo(url=settings.webapp_url),
                 )
             ],
+            [KeyboardButton(text="📅 Расписание"), KeyboardButton(text="📝 Мои ДЗ")],
             [KeyboardButton(text="📚 Каталог курсов")],
+        ],
+        resize_keyboard=True,
+    )
+
+
+def get_guest_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура гостя: каталог + вход (docs/05, п.3 — «Мои услуги» для гостей)."""
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📚 Каталог курсов")],
+            [
+                KeyboardButton(
+                    text="🔑 Войти (/login)",
+                    web_app=None,
+                )
+            ],
         ],
         resize_keyboard=True,
     )
