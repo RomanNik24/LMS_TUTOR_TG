@@ -16,19 +16,45 @@ class LessonRepository(BaseRepository[Lesson]):
         self, session: AsyncSession, lesson_id: int
     ) -> Optional[Lesson]:
         """
-        Атомарный переход scheduled -> completed (условный UPDATE).
+        Атомарный переход scheduled|needs_confirmation -> completed
+        (условный UPDATE).
 
-        WHERE status = 'scheduled' гарантирует, что при параллельных вызовах
-        (ручное /complete из API и cron-автозакрытие из воркера) ровно один
-        запрос обновит строку; второй получит None и не приведёт к повторному
-        списанию баланса. Возвращает обновлённый урок либо None, если урок
-        уже завершён/отменён или не найден.
+        WHERE status IN ('scheduled', 'needs_confirmation') гарантирует, что
+        при параллельных вызовах (ручное /complete из API и cron-подтверждение
+        из воркера) ровно один запрос обновит строку; второй получит None и не
+        приведёт к повторному списанию баланса. Возвращает обновлённый урок
+        либо None, если урок уже завершён/отменён или не найден.
+        """
+        stmt = (
+            update(self.model)
+            .where(self.model.id == lesson_id)
+            .where(
+                self.model.status.in_(
+                    [LessonStatusEnum.scheduled, LessonStatusEnum.needs_confirmation]
+                )
+            )
+            .values(status=LessonStatusEnum.completed)
+            .returning(self.model)
+        )
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.scalar_one_or_none()
+
+    async def mark_needs_confirmation_atomic(
+        self, session: AsyncSession, lesson_id: int
+    ) -> Optional[Lesson]:
+        """
+        Атомарный переход scheduled -> needs_confirmation (условный UPDATE).
+
+        Используется cron-автозакрытием: урок помечается «ждёт подтверждения»
+        БЕЗ списания баланса. WHERE status='scheduled' — повторный cron-проход
+        или параллельная отмена/завершение не дадут второго перехода.
         """
         stmt = (
             update(self.model)
             .where(self.model.id == lesson_id)
             .where(self.model.status == LessonStatusEnum.scheduled)
-            .values(status=LessonStatusEnum.completed)
+            .values(status=LessonStatusEnum.needs_confirmation)
             .returning(self.model)
         )
         result = await session.execute(stmt)

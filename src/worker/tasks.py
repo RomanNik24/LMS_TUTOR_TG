@@ -143,6 +143,27 @@ def _hw_text(hw: Homework) -> str:
     )
 
 
+async def build_close_requests(lessons: list[Lesson]) -> list[tuple[int, str]]:
+    """Сообщения ученикам о переводе урока в «ждёт подтверждения».
+
+    Деньги ещё НЕ списаны: преподаватель подтвердит проведение (или отменит
+    урок, если занятие не состоялось) — только тогда спишется занятие.
+    """
+    out: list[tuple[int, str]] = []
+    for lesson in lessons:
+        student = lesson.student
+        if not student or not student.telegram_id:
+            continue
+        text = (
+            f"⏳ Урок «{lesson.subject}» "
+            f"({format_lesson_time(lesson.start_time)}) завершён и переведён "
+            f"в статус «ждёт подтверждения». Преподаватель подтвердит проведение, "
+            f"после чего будет списано занятие."
+        )
+        out.append((student.telegram_id, text))
+    return out
+
+
 # ------------------------- Arq job wrappers -------------------------
 
 
@@ -188,46 +209,52 @@ async def notify_homework_deadlines(ctx: dict) -> int:
 
 
 async def close_lesson_cycle(ctx: dict) -> int:
-    """Arq cron: автозакрытие завершившихся уроков (completed + списание баланса).
+    """Arq cron: автозакрытие завершившихся уроков БЕЗ списания баланса.
 
-    Ученикам и админу приходит подтверждение со статусом баланса
-    (docs/01, п.4.2: баланс занятия списывается после проведения).
-    Подтверждения дедуплицируются по Redis-ключу lesson_close:{id}
+    Урок переводится scheduled -> needs_confirmation; ученику приходит
+    уведомление «ждёт подтверждения», админу — сводка уроков, требующих
+    решения (подтвердить POST /lessons/{id}/complete со списанием занятия
+    или отменить /cancel без списания). Списание происходит только после
+    явного подтверждения преподавателем — если урок не состоялся, деньги
+    не спишутся. Уведомления дедуплицируются Redis-ключом lesson_close:{id}
     (TTL 3 дня) — иначе каждые 15 минут приходило бы повторное сообщение.
     """
     redis = ctx.get("redis")
     service = LessonService()
     user_repo = UserRepository()
+    messages: list[tuple[int, str]] = []
     async with async_session_maker() as session:
         closed = await service.process_finished_lessons(session)
-        # Собрать данные для пушей по завершённым за последние 90 минут урокам
-        now = utcnow()
-        repo = LessonRepository()
-        finished = await repo.get_finished_completed_since(session, now - timedelta(minutes=90))
-        messages: list[tuple[int, str]] = []
-        for lesson in finished:
+        fresh: list[Lesson] = []
+        for lesson in closed:
             if redis is not None:
                 key = f"lesson_close:{lesson.id}"
                 already = await redis.set(key, "1", ex=3 * 24 * 3600, nx=True)
                 if not already:
-                    continue  # подтверждение уже отправлялось
+                    continue  # уведомление уже отправлялось
             student = await user_repo.get_by_id(session, lesson.student_id)
             if not student:
                 continue
-            text = (
-                f"✅ Урок «{lesson.subject}» проведён и закрыт."
-                f"\n💸 Списано занятие. Остаток: {student.balance}"
-            )
-            if student.telegram_id:
-                messages.append((student.telegram_id, text))
+            lesson.student = student
+            fresh.append(lesson)
+        messages.extend(build_close_requests(fresh))
+        # одна сводка всем админам: какие уроки ждут подтверждения
+        if fresh:
             admins = await user_repo.get_by_role(session, RoleEnum.admin)
+            lines = "\n".join(
+                f"— #{l.id} {l.subject} ({format_lesson_time(l.start_time)}) "
+                f"ученик {l.student.login}"
+                for l in fresh
+            )
+            summary = (
+                "🔔 Ждут подтверждения проведения (баланс ещё не списан):\n"
+                + lines
+                + "\nПодтвердите POST /lessons/{id}/complete (списание) "
+                "или отмените /cancel (без списания)."
+            )
             for admin in admins:
                 if admin.telegram_id:
-                    messages.append(
-                        (admin.telegram_id,
-                         f"✅ Автозакрытие: урок «{lesson.subject}» "
-                         f"({format_lesson_time(lesson.start_time)}) у {student.login} проведён.")
-                    )
+                    messages.append((admin.telegram_id, summary))
         await session.commit()
 
     if messages:
@@ -240,5 +267,5 @@ async def close_lesson_cycle(ctx: dict) -> int:
                     logger.warning("Не удалось отправить подтверждение %s: %s", chat_id, exc)
         finally:
             await bot.session.close()
-    logger.info("close_lesson_cycle: closed=%d", closed)
-    return closed
+    logger.info("close_lesson_cycle: marked_needs_confirmation=%d", len(closed))
+    return len(closed)
