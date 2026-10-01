@@ -129,7 +129,7 @@ class TestLessonFlow:
         # пробник с автоконвертацией 18 -> 5
         resp = await c.post(f"/mock-exams/{c.student_id}", json={
             "subject": "informatics", "primary_score": 18,
-            "exam_date": "2026-10-04",
+            "date": "2026-10-04",
         })
         assert resp.status_code == 201
         assert resp.json()["grade"] == 5
@@ -160,13 +160,13 @@ class TestLessonFlow:
         c = api_client
         _login_as(c, "admin")
         await c.post(f"/mock-exams/{c.student_id}", json={
-            "subject": "informatics", "primary_score": 13, "exam_date": "2026-10-01",
+            "subject": "informatics", "primary_score": 10, "date": "2026-10-01",
         })
         _login_as(c, "student")
         resp = await c.get(f"/mock-exams/{c.student_id}")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
-        assert resp.json()[0]["grade"] == 4  # 13 баллов -> 4 (порог docs/04: 12-16)
+        assert resp.json()[0]["grade"] == 3  # 10 баллов -> 3 (пороги: 17=5, 12=4, 5=3, 0=2)
 
     async def test_student_cannot_see_other_student(self, api_client):
         c = api_client

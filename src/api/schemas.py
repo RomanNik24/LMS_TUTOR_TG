@@ -1,7 +1,7 @@
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from typing import List, Optional
-
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.aliases import AliasChoices
 
 
 class LoginRequest(BaseModel):
@@ -146,16 +146,14 @@ class HomeworkDetailResponse(BaseModel):
 class CreateMockExamRequest(BaseModel):
     subject: str
     primary_score: int
-    exam_date: Optional[date] = None
+    date: "dt_date | None" = Field(default=None, validation_alias=AliasChoices("date", "exam_date"))
     grade: Optional[int] = None
 
 
 class MockExamResponse(BaseModel):
     id: int
     student_id: int
-    # В БД поле называется `date`; отдаём его как `exam_date` (не конфликтует
-    # с типом datetime.date), принимаем оба имени при валидации из ORM.
-    exam_date: date = Field(validation_alias=AliasChoices("exam_date", "date"))
+    date: dt_date
     subject: str
     primary_score: int
     grade: Optional[int] = None
