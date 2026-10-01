@@ -24,6 +24,8 @@ def lesson_status_color(status: str):
         "scheduled": ft.Colors.BLUE,
         "completed": ft.Colors.GREEN,
         "cancelled": ft.Colors.RED,
+        # ждёт подтверждения преподавателя — списание ещё не произошло
+        "needs_confirmation": ft.Colors.ORANGE,
     }.get(status, ft.Colors.GREY)
 
 

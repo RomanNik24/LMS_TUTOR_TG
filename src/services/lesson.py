@@ -112,7 +112,7 @@ class LessonService:
         session: AsyncSession,
         lesson_id: int,
     ) -> Lesson:
-        """Отменить урок (scheduled -> cancelled; баланс не списывается)."""
+        """Отменить урок (scheduled/needs_confirmation -> cancelled; баланс не списывается)."""
         lesson = await self.lesson_repo.get_by_id(session, lesson_id)
         if not lesson:
             raise NotFoundError(f"Урок {lesson_id} не найден")
@@ -132,51 +132,68 @@ class LessonService:
         """
         Провести урок: status -> completed и списать 1 занятие с баланса.
 
+        Вызывается преподавателем вручную (POST /lessons/{id}/complete), в том
+        числе для подтверждения урока в статусе needs_confirmation после
+        автозакрытия воркером. Баланс списывается ТОЛЬКО здесь — на этапе
+        подтверждения факта проведения (docs/01, п.4.2).
+
         Баланс может уйти в минус — это сигнал «должника» для дашборда
         (docs/01, п.4.2: приём платежей вне системы, учёт вручную).
+
+        Гонки исключены на уровне СУБД:
+        - статус меняется условным UPDATE ... WHERE status IN
+          ('scheduled','needs_confirmation') (mark_completed_atomic) — при
+          параллельном ручном /complete и подтверждении из воркера ровно один
+          вызов считает урок завершённым;
+        - баланс меняется атомарно UPDATE ... SET balance = balance - 1
+          (atomic_adjust_balance), без read-modify-write.
+        Оба запроса выполняются в одной транзакции сессии.
         """
         lesson = await self.lesson_repo.get_by_id(session, lesson_id)
         if not lesson:
             raise NotFoundError(f"Урок {lesson_id} не найден")
-        if lesson.status == LessonStatusEnum.completed:
-            raise ValidationError("Урок уже проведён")
         if lesson.status == LessonStatusEnum.cancelled:
             raise ValidationError("Отменённый урок нельзя провести")
 
-        # Повторно читаем ученика с блокировкой строки на Postgres
-        # (для SQLite в тестах — обычное чтение)
-        student = await self.user_repo.get_by_id(session, lesson.student_id)
-        if student is None:
+        # Атомарный переход scheduled|needs_confirmation -> completed.
+        # None => урок уже завершён конкурентным вызовом (или изменился статус).
+        updated = await self.lesson_repo.mark_completed_atomic(session, lesson_id)
+        if updated is None:
+            raise ValidationError("Урок уже проведён")
+
+        new_balance = await self.user_repo.atomic_adjust_balance(
+            session, lesson.student_id, -1
+        )
+        if new_balance is None:
             raise NotFoundError("Ученик урока не найден")
 
-        await self.lesson_repo.update(
-            session, lesson_id, status=LessonStatusEnum.completed
-        )
-        await self.user_repo.update(
-            session, student.id, balance=student.balance - 1
-        )
         logger.info(
-            "Lesson %s completed, balance of student %s decremented",
+            "Lesson %s completed, balance of student %s set to %d",
             lesson_id,
-            student.id,
+            lesson.student_id,
+            new_balance,
         )
-        updated = await self.lesson_repo.get_by_id(session, lesson_id)
-        assert updated is not None
         return updated
 
     async def process_finished_lessons(
         self,
         session: AsyncSession,
         now: Optional[datetime] = None,
-    ) -> int:
-        """Автозакрытие завершившихся уроков (используется воркером)."""
+    ) -> list[Lesson]:
+        """Автозакрытие завершившихся уроков БЕЗ списания баланса (воркер).
+
+        Урок scheduled -> needs_confirmation: деньги НЕ списываются, пока
+        преподаватель явно не подтвердит проведение (POST /{id}/complete) или
+        не отменит урок (если занятие не состоялось). Возвращает список
+        уроков, переведённых в needs_confirmation в этом проходе.
+        """
         now = now or utcnow()
         lessons = await self.lesson_repo.get_finished_scheduled_until(session, now)
-        count = 0
+        closed: list[Lesson] = []
         for lesson in lessons:
-            try:
-                await self.complete_lesson(session, lesson.id)
-                count += 1
-            except ValidationError:
-                continue
-        return count
+            marked = await self.lesson_repo.mark_needs_confirmation_atomic(
+                session, lesson.id
+            )
+            if marked is not None:
+                closed.append(marked)
+        return closed
