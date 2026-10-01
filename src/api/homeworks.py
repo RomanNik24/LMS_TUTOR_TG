@@ -40,8 +40,18 @@ async def _detail(service: HomeworkService, session: AsyncSession, hw_id: int) -
     if not hw:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ДЗ не найдено")
     lesson: Lesson = await service.lesson_repo.get_by_id(session, hw.lesson_id)  # type: ignore[assignment]
-    data = HomeworkDetailResponse.model_validate(hw).model_dump()
-    data["student_id"] = lesson.student_id if lesson else 0
+    # В модели Homework нет поля student_id — читаем его из родительского урока.
+    # model_validate на ORM-объекте упадёт (missing field), поэтому собираем dict вручную.
+    data = {
+        "id": hw.id,
+        "lesson_id": hw.lesson_id,
+        "student_id": lesson.student_id if lesson else 0,
+        "description": hw.description,
+        "deadline": hw.deadline,
+        "status": hw.status.value if hasattr(hw.status, "value") else hw.status,
+        "student_file_url": hw.student_file_url,
+        "score": hw.score,
+    }
     return HomeworkDetailResponse.model_validate(data)
 
 

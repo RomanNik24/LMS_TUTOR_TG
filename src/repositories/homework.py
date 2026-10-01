@@ -43,9 +43,16 @@ class HomeworkRepository(BaseRepository[Homework]):
         session: AsyncSession,
         deadline_until: datetime,
         status: Optional[HomeworkStatusEnum] = HomeworkStatusEnum.pending,
+        after: Optional[datetime] = 0,  # sentinel: не фильтровать по нижней границе
     ) -> list[Homework]:
-        """ДЗ с дедлайном до указанной даты и заданным статусом (для воркера)."""
+        """ДЗ с дедлайном до указанной даты и заданным статусом (для воркера).
+
+        `after=None` (явно переданный) снимает нижнюю границу; по умолчанию
+        возвращаются также просроченные ДЗ (нужно для автозакрытия/отчётов).
+        """
         stmt = select(self.model).where(self.model.deadline <= deadline_until)
+        if after is not None and after != 0:
+            stmt = stmt.where(self.model.deadline > after)
         if status is not None:
             stmt = stmt.where(self.model.status == status)
         stmt = stmt.order_by(self.model.deadline)

@@ -37,7 +37,7 @@ async def create_mock_exam(
             student_id=student_id,
             subject=data.subject,
             primary_score=data.primary_score,
-            exam_date=data.date,
+            exam_date=data.exam_date,
             grade=data.grade,
         )
     except (NotFoundError, ValidationError) as exc:
