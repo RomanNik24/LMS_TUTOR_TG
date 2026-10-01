@@ -1,1 +1,98 @@
-(empty output)
+# ============================================
+# Secrets & environment
+# ============================================
+.env
+.env.*
+!.env.example
+
+# ============================================
+# Virtual environments
+# ============================================
+.venv/
+venv/
+env/
+ENV/
+virtualenv/
+.python-version
+
+# ============================================
+# Python build / cache artifacts
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.installed.cfg
+MANIFEST
+
+# Package metadata
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# ============================================
+# Test / type-check / lint caches
+# ============================================
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.tox/
+.nox/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.cache
+nosetests.xml
+
+# ============================================
+# Databases & data dumps
+# ============================================
+*.sqlite
+*.sqlite3
+*.db
+dump.rdb
+appendonly.aof
+data/uploads/
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/
+
+# ============================================
+# Test output / reports
+# ============================================
+test_output.txt
+*.report
+report.json
+allure-results/
+
+# ============================================
+# Editors & OS
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================
+# Local scratch files
+# ============================================
+project-tree.txt
