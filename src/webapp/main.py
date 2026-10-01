@@ -9,7 +9,7 @@ import httpx
 from src.core.config import settings
 from src.db.models import RoleEnum
 
-import ftui_common as ui
+from src.webapp import ftui_common as ui
 
 
 # ============================================================
