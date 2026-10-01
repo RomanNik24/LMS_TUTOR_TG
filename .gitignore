@@ -12,3 +12,9 @@ venv/
 .env.*
 # Тестовые и локальные загрузки
 /data/uploads/
+
+# Локальные артефакты (не для GitHub)
+dump.rdb
+*.rdb
+/project-tree.txt
+/test_db.py
