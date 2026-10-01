@@ -131,7 +131,8 @@ class TestLessonService:
             await service.cancel_lesson(db_session, lesson.id)
 
     async def test_auto_close_finished(self, db_session, student):
-        """Воркер-метод закрывает завершившиеся scheduled-уроки со списанием."""
+        """Автозакрытие помечает завершившиеся scheduled-уроки needs_confirmation
+        и НЕ списывает баланс (списание — только после подтверждения учителем)."""
         past_start = datetime(2026, 9, 30, 8, 0)
         # в обход проверки будущего времени — создаём напрямую через репозиторий
         from src.db.models import Lesson, LessonStatusEnum as LSE
@@ -141,13 +142,63 @@ class TestLessonService:
             status=LSE.scheduled,
         ))
         await db_session.commit()
-        count = await LessonService().process_finished_lessons(
+        closed = await LessonService().process_finished_lessons(
             db_session, now=datetime(2026, 10, 1, 0, 0)
         )
         await db_session.commit()
-        assert count == 1
+        assert len(closed) == 1
+        assert closed[0].status == LessonStatusEnum.needs_confirmation
+        user = await UserRepository().get_by_id(db_session, student.id)
+        assert user.balance == 3  # деньги НЕ списаны без подтверждения
+
+    async def test_confirm_after_autoclose_debits_once(self, db_session, student):
+        """needs_confirmation -> complete: списание ровно один раз."""
+        past_start = datetime(2026, 9, 30, 8, 0)
+        from src.db.models import Lesson, LessonStatusEnum as LSE
+        lesson = Lesson(
+            student_id=student.id, subject="math",
+            start_time=past_start, end_time=past_start + timedelta(hours=1),
+            status=LSE.scheduled,
+        )
+        db_session.add(lesson)
+        await db_session.commit()
+        service = LessonService()
+        closed = await service.process_finished_lessons(
+            db_session, now=datetime(2026, 10, 1, 0, 0)
+        )
+        await db_session.commit()
+        assert len(closed) == 1
+        done = await service.complete_lesson(db_session, lesson.id)
+        await db_session.commit()
+        assert done.status == LessonStatusEnum.completed
         user = await UserRepository().get_by_id(db_session, student.id)
         assert user.balance == 2
+        with pytest.raises(ValidationError):
+            await service.complete_lesson(db_session, lesson.id)
+        user = await UserRepository().get_by_id(db_session, student.id)
+        assert user.balance == 2  # повторное подтверждение не спишет снова
+
+    async def test_cancel_needs_confirmation_no_debit(self, db_session, student):
+        """Урок не состоялся -> отмена из needs_confirmation без списания."""
+        past_start = datetime(2026, 9, 30, 8, 0)
+        from src.db.models import Lesson, LessonStatusEnum as LSE
+        lesson = Lesson(
+            student_id=student.id, subject="math",
+            start_time=past_start, end_time=past_start + timedelta(hours=1),
+            status=LSE.scheduled,
+        )
+        db_session.add(lesson)
+        await db_session.commit()
+        service = LessonService()
+        await service.process_finished_lessons(
+            db_session, now=datetime(2026, 10, 1, 0, 0)
+        )
+        await db_session.commit()
+        cancelled = await service.cancel_lesson(db_session, lesson.id)
+        await db_session.commit()
+        assert cancelled.status == LessonStatusEnum.cancelled
+        user = await UserRepository().get_by_id(db_session, student.id)
+        assert user.balance == 3
 
 
 class TestHomeworkService:

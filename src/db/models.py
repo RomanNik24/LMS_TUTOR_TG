@@ -33,6 +33,9 @@ class LessonStatusEnum(str, enum.Enum):
     scheduled = "scheduled"
     completed = "completed"
     cancelled = "cancelled"
+    # Автозакрытие воркера не списывает баланс: урок попадает сюда,
+    # пока преподаватель не подтвердит факт проведения (или не отменит).
+    needs_confirmation = "needs_confirmation"
 
 
 class HomeworkStatusEnum(str, enum.Enum):
@@ -53,6 +56,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String)
     balance: Mapped[int] = mapped_column(Integer, default=0)
     lesson_price: Mapped[int] = mapped_column(Integer, default=0)
+    # IANA-имя часовой зоны пользователя (Europe/Moscow и т.п.). Бот
+    # подставляет его автоматически из Telegram-профиля при /login; все
+    # показываемые человеку времена пересчитываются из UTC в эту зону.
+    timezone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, server_default=func.now()
     )

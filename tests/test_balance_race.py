@@ -38,7 +38,6 @@ async def _make_student(session: AsyncSession, balance: int = 10) -> User:
         login=f"race_stu_{_counter}",
         password_hash="x",
         role=RoleEnum.student,
-        full_name="Test Student",
         balance=balance,
     )
     session.add(user)
@@ -80,7 +79,8 @@ class TestAtomicBalanceOps:
     async def test_double_complete_debits_once(self, db_session):
         """Повторный complete_lesson не списывает баланс второй раз."""
         student = await _make_student(db_session, balance=3)
-        lesson = await _make_past_lesson(db_session, student.id)
+        student_id = int(student.id)
+        lesson = await _make_past_lesson(db_session, student_id)
         service = LessonService()
 
         done = await service.complete_lesson(db_session, lesson.id)
@@ -93,30 +93,46 @@ class TestAtomicBalanceOps:
             await service.complete_lesson(db_session, lesson.id)
         await db_session.rollback()
 
-        user = await UserRepository().get_by_id(db_session, student.id)
+        user = await UserRepository().get_by_id(db_session, student_id)
         assert user.balance == 2  # списание ровно один раз
 
     @pytest.mark.asyncio
     async def test_manual_complete_and_autoclose_race(self, db_session):
-        """Ручное закрытие и cron-автозакрытие одного урока: -1, а не -2."""
+        """Ручное подтверждение и cron-автозакрытие одного урока: -1, а не -2.
+
+        Cron переводит scheduled -> needs_confirmation (без списания), затем
+        ручное /complete подтверждает проведение и списывает ровно 1 занятие;
+        повторные проходы cron и /complete ничего не списывают.
+        """
         student = await _make_student(db_session, balance=5)
         lesson = await _make_past_lesson(db_session, student.id)
         service = LessonService()
 
         # имитируем гонку: два вызова подряд в одной "сессии" —
-        # условный UPDATE scheduled->completed пропустит второй
+        # условный UPDATE scheduled->needs_confirmation пропустит второй
         closed = await service.process_finished_lessons(
             db_session, now=datetime(2026, 10, 1, 0, 0)
         )
         await db_session.commit()
-        assert closed == 1
-        # повторный цикл автозакрытия уже ничего не находит и не списывает
+        assert len(closed) == 1
+        # повторный цикл автозакрытия уже ничего не находит
         closed_again = await service.process_finished_lessons(
             db_session, now=datetime(2026, 10, 1, 0, 0)
         )
         await db_session.commit()
-        assert closed_again == 0
+        assert closed_again == []
 
+        user = await UserRepository().get_by_id(db_session, student.id)
+        assert user.balance == 5  # без подтверждения деньги не списаны
+
+        # преподаватель подтвердил факт проведения -> списание ровно один раз
+        done = await service.complete_lesson(db_session, lesson.id)
+        await db_session.commit()
+        assert done.status == LessonStatusEnum.completed
+        from src.core.exceptions import ValidationError
+
+        with pytest.raises(ValidationError):
+            await service.complete_lesson(db_session, lesson.id)
         user = await UserRepository().get_by_id(db_session, student.id)
         assert user.balance == 4
 

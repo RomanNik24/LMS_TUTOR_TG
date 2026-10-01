@@ -100,7 +100,14 @@ class TestBuildLessonReminders:
         assert build_lesson_reminders([lesson]) == []
 
     def test_format_lesson_time(self):
-        assert format_lesson_time(datetime(2026, 10, 5, 9, 30)) == "05.10 09:30"
+        # без tz — UTC с явной подписью (раньше время отдавалось «голым»
+        # UTC без зоны, что вводило пользователя в заблуждение)
+        assert format_lesson_time(datetime(2026, 10, 5, 9, 30)) == "05.10 09:30 UTC"
+
+    def test_format_lesson_time_user_timezone(self):
+        assert format_lesson_time(
+            datetime(2026, 10, 5, 9, 30), "Europe/Moscow"
+        ) == "05.10 12:30 МСК"
 
 
 class TestCollectLessonReminders:
@@ -150,10 +157,16 @@ class TestBuildHomeworkReminders:
         await db_session.commit()
         hw.lesson = lesson
         lesson.student = s
-        out = build_homework_reminders([hw])
+        # now передаём явно: остаток считается от того же момента, что и
+        # выборка (фикс неточного «через 24 часа» при cron-окне 24ч)
+        # now НЕ передаём -> считается от utcnow(); дедлайн NOW+20ч, а NOW в
+        # тесте зафиксирован в прошлом — остаток отрицательный. Проверяем
+        # детерминированный вариант: now=момент «до» дедлайна на 20 часов.
+        fake_now = hw.deadline - timedelta(hours=20)
+        out = build_homework_reminders([hw], now=fake_now)
         assert len(out) == 1
         _, text = out[0]
-        assert "Дедлайн ДЗ через 24 часа" in text and "ЕГЭ" in text
+        assert "Дедлайн ДЗ через 20 часов" in text and "ЕГЭ" in text
 
 
 class TestCollectHomeworkReminders:
@@ -221,8 +234,11 @@ class TestCollectHomeworkReminders:
 
 
 class TestAutoCloseIntegration:
-    async def test_process_finished_lessons_closes_and_debits(self, db_session):
-        """scheduled-урок с прошедшим end_time -> completed, баланс −1 (для обёртки cron)."""
+    async def test_process_finished_lessons_marks_without_debit(self, db_session):
+        """scheduled-урок с прошедшим end_time -> needs_confirmation, баланс без изменений.
+
+        Списание только после подтверждения преподавателем (complete_lesson).
+        """
         s = await _make_user(db_session, telegram_id=401, balance=4)
         past = utcnow() - timedelta(hours=3)
         lesson = await _make_lesson(db_session, s, past)
@@ -230,11 +246,19 @@ class TestAutoCloseIntegration:
         service = LessonService()
         closed = await service.process_finished_lessons(db_session)
         await db_session.commit()
-        assert closed == 1
+        assert len(closed) == 1
 
         fresh_student = await UserRepository().get_by_id(db_session, s.id)
-        assert fresh_student.balance == 3
+        assert fresh_student.balance == 4  # НЕ списано без подтверждения
         from src.repositories import LessonRepository
+        fresh_lesson = await LessonRepository().get_by_id(db_session, lesson.id)
+        assert fresh_lesson.status == LessonStatusEnum.needs_confirmation
+
+        # подтверждение преподавателем -> completed и списание ровно 1
+        await service.complete_lesson(db_session, lesson.id)
+        await db_session.commit()
+        fresh_student = await UserRepository().get_by_id(db_session, s.id)
+        assert fresh_student.balance == 3
         fresh_lesson = await LessonRepository().get_by_id(db_session, lesson.id)
         assert fresh_lesson.status == LessonStatusEnum.completed
 

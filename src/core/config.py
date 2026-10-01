@@ -2,7 +2,7 @@ import enum
 import logging
 from typing import Optional
 
-from pydantic import SecretStr, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,9 +58,30 @@ class Settings(BaseSettings):
     # выводится из api_base_url (для локальной разработки через туннель).
     webapp_public_url: Optional[str] = None
 
-    # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка)
+    # Внутренний адрес Flet-приложения для HTTP/WS-прокси /app (src/api/webapp.py).
+    # В docker-compose задаётся как http://webapp:8550; локально — 127.0.0.1.
+    webapp_upstream_url: str = "http://127.0.0.1:8550"
+
+    # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка).
+    # ВАЖНО: раньше в .env.example было MAX_UPLOAD_SIZE_MB, а поле называлось
+    # max_upload_mb — pydantic-settings не сопоставил их и из-за extra="ignore"
+    # молча использовал дефолт 10 МБ. Теперь каноническое имя совпадает с
+    # переменной окружения; AliasChoices дополнительно принимает устаревшее
+    # MAX_UPLOAD_SIZE_MB (в старых .env на серверах) и lowercase-варианты.
+    max_upload_mb: int = Field(
+        default=10,
+        validation_alias=AliasChoices("max_upload_mb", "MAX_UPLOAD_SIZE_MB"),
+    )
     upload_dir: str = "data/uploads"
-    max_upload_mb: int = 10
+
+    # Прямое переопределение URL БД (нужно для Alembic-скриптов и тестов на
+    # SQLite). Если не задан — URL собирается из DB_HOST/DB_PORT/... в property
+    # database_url ниже. Публичное поле называется db_url, а свойство
+    # database_url читает его через _database_url_override: имя database_url
+    # занято property, и объявлять полем с тем же именем нельзя — Pydantic v2
+    # тогда падает («Input should be a valid string, input_value=<property
+    # object>»), а приватные поля (_x) не читают переменные окружения.
+    db_url: Optional[str] = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -68,9 +89,43 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @model_validator(mode="after")
+    def _sync_db_url_alias(self) -> "Settings":
+        """Нормализуем публичное поле db_url (единственный источник оверрайда).
+
+        before-validator перекладывает DATABASE_URL/database_url в db_url;
+        здесь просто приводим пустую строку к None, чтобы property
+        database_url корректно определял «оверрайд не задан».
+        """
+        if self.db_url is not None and not str(self.db_url).strip():
+            self.db_url = None
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.environment == Environment.production
+
+    @model_validator(mode="before")
+    @classmethod
+    def _alias_database_url(cls, values):
+        """Разрешить задавать DATABASE_URL в окружении (приоритет над DB_*).
+
+        Без этого alembic/env.py с явным DATABASE_URL=sqlite+aiosqlite:///...
+        всё равно подключался к Postgres из DB_* переменных, что ломало
+        миграции вне Docker (CI, локальная проверка).
+
+        pydantic-settings читает из окружения только имя поля (DB_URL), поэтому
+        значение DATABASE_URL (или kwarg database_url) подтягиваем вручную.
+        """
+        if isinstance(values, dict):
+            raw = values.get("database_url") or values.get("DATABASE_URL")
+            if not raw:
+                import os
+
+                raw = os.getenv("DATABASE_URL")
+            if raw:
+                values["db_url"] = raw
+        return values
 
     @model_validator(mode="after")
     def _validate_secrets(self) -> "Settings":
@@ -132,19 +187,23 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Сборка async-URL для подключения к базе данных (asyncpg)."""
-        return (
-            f"postgresql+asyncpg://"
-            f"{self.db_user}:{self.db_password}"
-            f"@{self.db_host}:{self.db_port}"
-            f"/{self.db_name}"
-        )
+        """Async-URL БД: явный DATABASE_URL (если задан) иначе сборка из DB_*."""
+        if self.db_url:
+            return self.db_url
+        return self.build_database_url()
 
     @property
     def sync_database_url(self) -> str:
-        """Sync-URL (psycopg2) — только для Alembic offline-режима."""
+        """Sync-URL — для Alembic offline-режима; asyncpg->psycopg2 замена."""
+        url = self.database_url
+        if "+asyncpg" in url:
+            return url.replace("+asyncpg", "+psycopg2")
+        return url
+
+    def build_database_url(self) -> str:
+        """Сборка async-URL для подключения к базе данных (asyncpg)."""
         return (
-            f"postgresql://"
+            f"postgresql+asyncpg://"
             f"{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}"
             f"/{self.db_name}"

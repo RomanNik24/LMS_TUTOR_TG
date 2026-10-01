@@ -14,7 +14,6 @@ Flet-сервер (webapp) поднят отдельно; данный роут�
 
 import asyncio
 import logging
-import os
 from urllib.parse import urlparse
 
 import httpx
@@ -32,7 +31,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["MiniApp proxy"])
 
 # Адрес Flet-приложения внутри сети (в docker-compose — имя сервиса)
-WEBAPP_UPSTREAM_URL = os.getenv("WEBAPP_UPSTREAM_URL", "http://127.0.0.1:8550")
+from src.core.config import settings
+
+# Единый источник конфигурации — поле Settings.webapp_upstream_url
+# (переменная окружения WEBAPP_UPSTREAM_URL). Раньше здесь был прямой
+# os.getenv, из-за чего переменная не была описана в Settings и её
+# нельзя было проверить/документировать наравне с остальными.
+WEBAPP_UPSTREAM_URL = settings.webapp_upstream_url
 
 _HOP_BY_HOP = {
     "connection",

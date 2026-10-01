@@ -1,1 +1,14 @@
-(empty output)
+# Python bytecode and caches
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+
+# Local data (uploads, sqlite)
+data/
+*.db
+
+# Environment files
+.env
+.env.local

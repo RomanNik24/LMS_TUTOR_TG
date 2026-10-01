@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bot.catalog import render_catalog
 from src.bot.keyboards import get_guest_keyboard, get_main_keyboard
+from src.core.timeutil import fmt_local
 from src.db.models import HomeworkStatusEnum, RoleEnum
 from src.repositories import LessonRepository, UserRepository
 from src.services.homework import HomeworkService
@@ -32,8 +33,9 @@ def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _fmt_dt(dt: datetime) -> str:
-    return dt.strftime("%d.%m %H:%M")
+def _fmt_dt(dt: datetime, tz_name: str | None = None) -> str:
+    """Время в локальной зоне пользователя (с меткой зоны), а не голое UTC."""
+    return fmt_local(dt, tz_name)
 
 
 async def _get_user(message: Message, session: AsyncSession):
@@ -52,8 +54,11 @@ async def cmd_schedule(message: Message, session: AsyncSession):
         return
 
     now = _utcnow_naive()
-    lessons = await lesson_repo.get_in_period(session, now, now + timedelta(days=7))
-    my_lessons = [l for l in lessons if l.student_id == user.id]
+    # фильтрация по ученику — на уровне SQL (индекс ix_lessons_student_id),
+    # а не выборкой уроков всех учеников с фильтром в Python
+    my_lessons = await lesson_repo.get_for_student_in_period(
+        session, user.id, now, now + timedelta(days=7)
+    )
 
     if not my_lessons:
         await message.answer("📅 На ближайшую неделю уроков нет.")
@@ -61,7 +66,7 @@ async def cmd_schedule(message: Message, session: AsyncSession):
 
     lines = ["<b>📅 Ближайшие уроки (7 дней):</b>", ""]
     for lesson in my_lessons[:10]:
-        lines.append(f"• {_fmt_dt(lesson.start_time)} — {lesson.subject}")
+        lines.append(f"• {_fmt_dt(lesson.start_time, user.timezone)} — {lesson.subject}")
     await message.answer("\n".join(lines), reply_markup=get_main_keyboard())
 
 
@@ -93,7 +98,7 @@ async def cmd_homeworks(message: Message, session: AsyncSession):
         suffix = f", оценка: {hw.score}" if hw.status == HomeworkStatusEnum.graded else ""
         topic = hw.description.splitlines()[0][:60] if hw.description else "—"
         lines.append(
-            f"• до {_fmt_dt(hw.deadline)}: {marks[hw.status]}{suffix}\n  <i>{topic}</i>"
+            f"• до {_fmt_dt(hw.deadline, user.timezone)}: {marks[hw.status]}{suffix}\n  <i>{topic}</i>"
         )
 
     lines.append(
