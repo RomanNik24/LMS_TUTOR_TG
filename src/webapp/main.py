@@ -1,34 +1,23 @@
 import json
+import os
 from datetime import datetime
+from types import SimpleNamespace
 
 import flet as ft
 import httpx
-from sqlalchemy.ext.asyncio import (
-    async_sessionmaker,
-    create_async_engine,
-)
 
 from src.core.config import settings
 from src.db.models import RoleEnum
-from src.repositories import UserRepository
-from src.services.auth import AuthService
 
 
 # ============================================================
-# Подключение к БД
+# Точка входа API
 # ============================================================
+# WebApp НЕ имеет прямого доступа к БД — только через REST API
+# (docs/03_architecture.md). В docker-compose адрес передаётся
+# переменной окружения API_BASE_URL.
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-)
-
-async_session_maker = async_sessionmaker(
-    engine,
-    expire_on_commit=False,
-)
-
-API_BASE_URL = "http://127.0.0.1:8000"
+API_BASE_URL = os.getenv("API_BASE_URL", settings.api_base_url)
 
 
 # ============================================================
@@ -774,7 +763,7 @@ async def main(page: ft.Page):
     api_token = None
 
     # --------------------------------------------------------
-    # Получаем Telegram WebApp пользователя
+    # Получаем Telegram WebApp пользователя (telegram_id)
     # --------------------------------------------------------
 
     try:
@@ -792,22 +781,31 @@ async def main(page: ft.Page):
         pass
 
     # --------------------------------------------------------
-    # Получаем пользователя из БД
+    # Получаем пользователя через API (без прямого доступа к БД).
+    # POST /auth/webapp-identify возвращает профиль + JWT-токен.
+    # TODO (Этап безопасности): серверная верификация initData.
     # --------------------------------------------------------
 
     if user_id:
-        async with async_session_maker() as session:
-            user_repo = UserRepository()
+        try:
+            async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
+                resp = await client.post(
+                    "/auth/webapp-identify",
+                    json={"telegram_id": int(user_id)},
+                    timeout=10.0,
+                )
 
-            db_user = await user_repo.get_by_telegram_id(
-                session,
-                user_id,
-            )
-
-            if db_user:
-                auth_service = AuthService()
-
-                api_token = auth_service.create_access_token(db_user)
+                if resp.status_code == 200:
+                    payload = resp.json()
+                    api_token = payload.get("access_token")
+                    db_user = SimpleNamespace(
+                        id=payload["user"]["id"],
+                        login=payload["user"]["login"],
+                        role=payload["user"]["role"],
+                    )
+        except Exception:
+            # API недоступно — останемся на странице-заглушке
+            pass
 
     # --------------------------------------------------------
     # Создание экранов
@@ -825,7 +823,7 @@ async def main(page: ft.Page):
             page.route == "/student"
             and db_user
             and api_token
-            and db_user.role == RoleEnum.student
+            and db_user.role == RoleEnum.student.value
         ):
             page.views.append(
                 build_student_view(
@@ -843,7 +841,7 @@ async def main(page: ft.Page):
             page.route == "/admin"
             and db_user
             and api_token
-            and db_user.role == RoleEnum.admin
+            and db_user.role == RoleEnum.admin.value
         ):
             page.views.append(
                 build_admin_view(
@@ -927,10 +925,10 @@ async def main(page: ft.Page):
     # --------------------------------------------------------
 
     if db_user and api_token:
-        if db_user.role == RoleEnum.student:
+        if db_user.role == RoleEnum.student.value:
             await page.push_route("/student")
 
-        elif db_user.role == RoleEnum.admin:
+        elif db_user.role == RoleEnum.admin.value:
             await page.push_route("/admin")
 
         else:

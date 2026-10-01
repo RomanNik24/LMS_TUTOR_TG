@@ -1,40 +1,22 @@
-from collections.abc import AsyncGenerator
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+# Единый источник сессий БД — src/db/session.py (см. docs/03_architecture.md)
 from src.db.models import RoleEnum, User
+from src.db.session import get_db_session
 from src.repositories import UserRepository
 from src.services.auth import AuthService
 
-
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-)
-
-async_session_maker = async_sessionmaker(
-    engine,
-    expire_on_commit=False,
-)
-
-
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_maker() as session:
-        yield session
+__all__ = ["get_db_session", "oauth2_scheme", "get_current_user",
+           "require_admin", "require_student_or_admin"]
 
 
 # Используется FastAPI для чтения:
 # Authorization: Bearer <token>
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="login",
+    tokenUrl="auth/login",
 )
 
 

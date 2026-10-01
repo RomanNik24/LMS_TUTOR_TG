@@ -1,21 +1,16 @@
 import asyncio
 from datetime import datetime, timedelta
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from src.core.config import settings
-from src.db.base import Base
+# Таблицы создаёт ТОЛЬКО Alembic (alembic upgrade head) — см. docs/06_agent_rules.md
+from src.db.session import async_session_maker
+
 from src.db.models import RoleEnum, LessonStatusEnum, HomeworkStatusEnum
 from src.repositories import UserRepository, LessonRepository, HomeworkRepository
 from src.services.auth import AuthService
 
 async def main():
-    # Создаем асинхронный движок и фабрику сессий
-    engine = create_async_engine(settings.database_url, echo=False)
-    async_session = async_sessionmaker(engine, expire_on_commit=False)
-
-    # Принудительно создаем таблицы, чтобы скрипт сработал даже если миграции не применены
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Используем единый движок/сессии из src/db/session.py
+    async_session = async_session_maker
 
     # Инициализируем репозитории и сервис авторизации
     user_repo = UserRepository()
@@ -89,7 +84,10 @@ async def main():
     print("  Ученик 3: Student 3    / student3")
     print("  Ученик 4: Student 4    / student4")
     print("  Ученик 5: Student 5    / student5")
-    await engine.dispose()
+
+    # Единый движок больше не создаётся в seed — диспозим общий пул
+    from src.db.session import dispose_engine
+    await dispose_engine()
 
 if __name__ == "__main__":
     asyncio.run(main())
