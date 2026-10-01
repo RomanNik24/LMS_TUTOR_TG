@@ -1,4 +1,20 @@
-# MY_LMS — единый образ для api / bot / webapp (docs/02_tech_stack.md)
+# Стадия 1 (deps): требования из poetry.lock.
+# Стадия deps нужна только ради `poetry export`: poetry CLI не должен
+# попадать в финальный образ. poetry-core — это библиотека, бинарника
+# `poetry` она не даёт, поэтому раньше строка `poetry export ... ||`
+# всегда падала в захардкоженный pip-fallback с unpinned-версиями.
+# export — отдельный плагин в Poetry 2.x, поэтому ставим его явно.
+FROM python:3.12-slim AS deps
+WORKDIR /app
+RUN pip install --no-cache-dir "poetry==2.5.1" "poetry-plugin-export==1.9.0"
+COPY pyproject.toml poetry.lock ./
+# --without-hashes: блокировка по версиям (файлы в lock есть, но экспорт
+# с хешами тянет все ссылки). Основной+dev не нужен: тесты в образе не
+# запускаются, aiosqlite/pytest — только для локальной разработки.
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes --only main \
+ && pip install --no-cache-dir -r requirements.txt
+
+# Стадия 2 (финальная): MY_LMS — единый образ для api / bot / webapp
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,19 +23,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Системные зависимости для asyncpg/passlib
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/*
+# Требования из lock копируются из стадии deps: poetry CLI в финальный
+# образ не попадает, но версии пакетов ровно те, что в poetry.lock.
+COPY --from=deps /app/requirements.txt /tmp/requirements.txt
 
-# Сначала зависимости — кэш слоёв не сбрасывается при правках кода
-COPY pyproject.toml poetry.lock ./
-RUN pip install --no-cache-dir poetry-core==1.9.0 \
- && poetry export -f requirements.txt --output requirements.txt --without-hashes || \
-    pip install --no-cache-dir "fastapi" "uvicorn[standard]" "aiogram>=3" \
-        "pydantic-settings" "sqlalchemy>=2" "alembic>=1.13" "asyncpg>=0.29" \
-        "passlib[bcrypt]" "bcrypt==4.0.1" "python-jose[cryptography]" \
-        "redis>=5" "arq>=0.28" "httpx" "websockets>=12" "flet>=1.0" "greenlet" \
-        "python-multipart" "aiosqlite"
+# Системные зависимости для asyncpg/passlib + установка из lock
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir -r /tmp/requirements.txt \
+ && rm -f /tmp/requirements.txt
 
 # Код проекта
 COPY . .
