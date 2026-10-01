@@ -60,3 +60,18 @@ class CreateLessonRequest(BaseModel):
     subject: str
     start_time: datetime
     end_time: datetime
+
+class WebAppIdentifyRequest(BaseModel):
+    telegram_id: int
+
+
+class WebAppUserBrief(BaseModel):
+    id: int
+    login: str
+    role: str
+
+
+class WebAppIdentifyResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: WebAppUserBrief
