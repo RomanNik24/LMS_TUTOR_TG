@@ -24,6 +24,12 @@ RUN pip install --no-cache-dir poetry-core==1.9.0 \
 # Код проекта
 COPY . .
 
+# Каталог загрузок (api пишет туда ДЗ учеников). В docker-compose.yml на
+# /app/data/uploads монтируется named volume lms_uploads — без него файлы
+# теряются при пересоздании контейнера. VOLUME документирует это соглашение.
+RUN mkdir -p data/uploads
+VOLUME ["/app/data/uploads"]
+
 # Не root
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
