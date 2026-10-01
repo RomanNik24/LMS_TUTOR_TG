@@ -40,7 +40,8 @@ async def _detail(service: HomeworkService, session: AsyncSession, hw_id: int) -
     if not hw:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ДЗ не найдено")
     lesson: Lesson = await service.lesson_repo.get_by_id(session, hw.lesson_id)  # type: ignore[assignment]
-    data = HomeworkDetailResponse.model_validate(hw).model_dump()
+    data = hw.__dict__.copy()
+    data.pop("_sa_instance_state", None)
     data["student_id"] = lesson.student_id if lesson else 0
     return HomeworkDetailResponse.model_validate(data)
 

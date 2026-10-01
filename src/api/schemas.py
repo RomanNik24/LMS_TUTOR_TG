@@ -1,7 +1,6 @@
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
 from typing import List, Optional
-
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LoginRequest(BaseModel):
@@ -146,14 +145,14 @@ class HomeworkDetailResponse(BaseModel):
 class CreateMockExamRequest(BaseModel):
     subject: str
     primary_score: int
-    date: Optional[date] = None
+    date: "dt_date | None" = None
     grade: Optional[int] = None
 
 
 class MockExamResponse(BaseModel):
     id: int
     student_id: int
-    date: date
+    date: dt_date
     subject: str
     primary_score: int
     grade: Optional[int] = None

@@ -166,7 +166,7 @@ class TestLessonFlow:
         resp = await c.get(f"/mock-exams/{c.student_id}")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
-        assert resp.json()[0]["grade"] == 4  # 10 баллов -> 4
+        assert resp.json()[0]["grade"] == 3  # 10 баллов -> 3 (пороги: 17=5, 12=4, 5=3, 0=2)
 
     async def test_student_cannot_see_other_student(self, api_client):
         c = api_client
