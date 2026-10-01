@@ -205,6 +205,27 @@ async def build_close_requests(lessons: list[Lesson]) -> list[tuple[int, str]]:
     return out
 
 
+async def build_close_requests(lessons: list[Lesson]) -> list[tuple[int, str]]:
+    """Сообщения ученикам о переводе урока в «ждёт подтверждения».
+
+    Деньги ещё НЕ списаны: преподаватель подтвердит проведение (или отменит
+    урок, если занятие не состоялось) — только тогда спишется занятие.
+    """
+    out: list[tuple[int, str]] = []
+    for lesson in lessons:
+        student = lesson.student
+        if not student or not student.telegram_id:
+            continue
+        text = (
+            f"⏳ Урок «{lesson.subject}» "
+            f"({format_lesson_time(lesson.start_time)}) завершён и переведён "
+            f"в статус «ждёт подтверждения». Преподаватель подтвердит проведение, "
+            f"после чего будет списано занятие."
+        )
+        out.append((student.telegram_id, text))
+    return out
+
+
 # ------------------------- Arq job wrappers -------------------------
 
 
@@ -284,6 +305,17 @@ async def close_lesson_cycle(ctx: dict) -> int:
         # разная зона), а не дефолтная/UTC.
         if fresh:
             admins = await user_repo.get_by_role(session, RoleEnum.admin)
+            lines = "\n".join(
+                f"— #{l.id} {l.subject} ({format_lesson_time(l.start_time)}) "
+                f"ученик {l.student.login}"
+                for l in fresh
+            )
+            summary = (
+                "🔔 Ждут подтверждения проведения (баланс ещё не списан):\n"
+                + lines
+                + "\nПодтвердите POST /lessons/{id}/complete (списание) "
+                "или отмените /cancel (без списания)."
+            )
             for admin in admins:
                 if not admin.telegram_id:
                     continue
