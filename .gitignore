@@ -1,24 +1,9 @@
-# System/Environment files
-.env
-.env.local
-*.env.*
-
-# Virtual environments
+# Dependencies
 .venv/
-venv/
-env/
+
+# Compiled files and caches
 __pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+*.pyc
 
-# Database dumps/artifacts
+# Logs and data artifacts
 dump.rdb
-
-# Test output
-test_output.txt
-
-# User uploaded files
-data/uploads/
