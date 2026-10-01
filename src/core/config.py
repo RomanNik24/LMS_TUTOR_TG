@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # URL публичного доступа к FastAPI (из него же строится ссылка Mini App)
     api_base_url: str = "http://127.0.0.1:8000"
 
+    # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка)
+    upload_dir: str = "data/uploads"
+    max_upload_mb: int = 10
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

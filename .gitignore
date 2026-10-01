@@ -19,3 +19,6 @@ dump.rdb
 
 # Test output
 test_output.txt
+
+# User uploaded files
+data/uploads/
