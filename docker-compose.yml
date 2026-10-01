@@ -96,6 +96,24 @@ services:
     depends_on:
       - api
 
+  # Фоновые задачи: напоминания об уроках/ДЗ, автозакрытие (docs/01 п.5)
+  worker:
+    build: .
+    container_name: lms_worker
+    restart: always
+    command: ["python", "-m", "src.worker"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   postgres_data:
   redis_data:

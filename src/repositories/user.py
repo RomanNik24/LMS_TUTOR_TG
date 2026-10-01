@@ -26,3 +26,9 @@ class UserRepository(BaseRepository[User]):
         stmt = select(self.model).where(self.model.telegram_id == telegram_id)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_by_role(self, session: AsyncSession, role: RoleEnum) -> list[User]:
+        """Все пользователи с указанной ролью (для уведомлений админу)."""
+        stmt = select(self.model).where(self.model.role == role)
+        result = await session.execute(stmt)
+        return list(result.scalars().all())

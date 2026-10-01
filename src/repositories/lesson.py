@@ -157,3 +157,23 @@ class LessonRepository(BaseRepository[Lesson]):
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_finished_completed_since(
+        self,
+        session: AsyncSession,
+        since: datetime,
+    ) -> list[Lesson]:
+        """Завершённые (completed) уроки, закончившиеся после `since`.
+
+        Используется воркером для подтверждения автозакрытия ученику/админу.
+        """
+        stmt = (
+            select(self.model)
+            .where(
+                self.model.status == LessonStatusEnum.completed,
+                self.model.end_time >= since,
+            )
+            .order_by(self.model.start_time)
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())

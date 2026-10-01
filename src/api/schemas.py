@@ -1,6 +1,7 @@
 from datetime import date as dt_date, datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.aliases import AliasChoices
 
 
 class LoginRequest(BaseModel):
@@ -145,7 +146,7 @@ class HomeworkDetailResponse(BaseModel):
 class CreateMockExamRequest(BaseModel):
     subject: str
     primary_score: int
-    date: "dt_date | None" = None
+    date: "dt_date | None" = Field(default=None, validation_alias=AliasChoices("date", "exam_date"))
     grade: Optional[int] = None
 
 

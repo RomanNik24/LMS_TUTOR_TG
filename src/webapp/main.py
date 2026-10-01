@@ -456,7 +456,7 @@ def build_student_view(
                                         *[
                                             ft.Row(
                                                 [
-                                                    ft.Container(ft.Text(str(ex.get("date", ""))),
+                                                    ft.Container(ft.Text(str(ex.get("exam_date", ex.get("date", "")))),
                                                                expand=True, size=12),
                                                     ft.Container(ft.Text(ex.get("subject", "—")),
                                                                expand=True, size=12),
