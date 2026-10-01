@@ -15,6 +15,18 @@ class UserRepository(BaseRepository[User]):
         result = await session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_student_by_id(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> Optional[User]:
+        """Пользователь по id, только если это ученик (роль student)."""
+        stmt = select(self.model).where(
+            self.model.id == user_id, self.model.role == RoleEnum.student
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_by_login(self, session: AsyncSession, login: str) -> Optional[User]:
         """Найти пользователя по логину"""
         stmt = select(self.model).where(self.model.login == login)

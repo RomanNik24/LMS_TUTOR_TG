@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import (
@@ -16,6 +16,12 @@ from src.api.schemas import (
     LessonResponse,
     UserResponse,
 )
+from src.core.exceptions import (
+    AppError,
+    ConflictError,
+    NotFoundError,
+    ValidationError,
+)
 from src.db.models import (
     HomeworkStatusEnum,
     LessonStatusEnum,
@@ -28,12 +34,25 @@ from src.repositories import (
     UserRepository,
 )
 from src.services.auth import AuthService
+from src.services.homework import HomeworkService
+from src.services.lesson import LessonService
 
 
 router = APIRouter(
     prefix="/students",
     tags=["Students"],
 )
+
+
+def _translate(exc: Exception) -> HTTPException:
+    """Трансляция доменных исключений сервисов в HTTP-коды."""
+    if isinstance(exc, NotFoundError):
+        return HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    if isinstance(exc, ConflictError):
+        return HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    if isinstance(exc, ValidationError):
+        return HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
+    raise exc
 
 
 # ───────────────── GET ─────────────────
@@ -145,35 +164,15 @@ async def get_student_homeworks(
     Студент — только свои задания.
     """
 
-    user_repo = UserRepository()
+    # Проверка существования ученика и роли student — раньше делалась здесь
+    # отдельным get_by_id; теперь внутри HomeworkService.get_student_homeworks
+    # (NotFoundError -> 404), чтобы эндпоинты /students/{id}/* вели себя одинаково.
+    service = HomeworkService()
 
-    user = await user_repo.get_by_id(
-        session,
-        student_id,
-    )
-
-    if not user or user.role != RoleEnum.student:
-        raise HTTPException(
-            status_code=404,
-            detail="Ученик не найден",
-        )
-
-    lesson_repo = LessonRepository()
-    hw_repo = HomeworkRepository()
-
-    lessons = await lesson_repo.get_student_lessons(
-        session,
-        student_id,
-    )
-
-    homeworks = []
-
-    for lesson in lessons:
-        lesson_hws = await hw_repo.get_by_lesson_id(
-            session,
-            lesson.id,
-        )
-        homeworks.extend(lesson_hws)
+    try:
+        homeworks = await service.get_student_homeworks(session, student_id)
+    except AppError as exc:
+        raise _translate(exc) from exc
 
     return homeworks
 
@@ -240,31 +239,25 @@ async def create_lesson(
     Создать урок для ученика.
 
     Доступно только администратору.
+
+    Бизнес-логика (валидация времени, проверка пересечений слотов,
+    существование ученика) — целиком в LessonService.create_lesson,
+    как и в /lessons POST. Раньше этот эндпоинт обходил сервис и писал
+    урок напрямую в репозиторий без каких-либо проверок.
     """
 
-    user_repo = UserRepository()
-
-    user = await user_repo.get_by_id(
-        session,
-        student_id,
-    )
-
-    if not user or user.role != RoleEnum.student:
-        raise HTTPException(
-            status_code=404,
-            detail="Ученик не найден",
+    try:
+        lesson = await LessonService().create_lesson(
+            session=session,
+            student_id=student_id,
+            subject=data.subject,
+            start_time=data.start_time,
+            end_time=data.end_time,
+            video_url=data.video_url,
+            board_url=data.board_url,
         )
-
-    lesson_repo = LessonRepository()
-
-    lesson = await lesson_repo.create(
-        session=session,
-        student_id=student_id,
-        subject=data.subject,
-        start_time=data.start_time,
-        end_time=data.end_time,
-        status=LessonStatusEnum.scheduled,
-    )
+    except (NotFoundError, ConflictError, ValidationError) as exc:
+        raise _translate(exc) from exc
 
     await session.commit()
 

@@ -1,6 +1,6 @@
 """Эндпоинты домашних заданий: выдача, сдача, оценка."""
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,8 +40,15 @@ async def _detail(service: HomeworkService, session: AsyncSession, hw_id: int) -
     if not hw:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ДЗ не найдено")
     lesson: Lesson = await service.lesson_repo.get_by_id(session, hw.lesson_id)  # type: ignore[assignment]
-    # В модели Homework нет поля student_id — читаем его из родительского урока.
-    # model_validate на ORM-объекте упадёт (missing field), поэтому собираем dict вручную.
+    return _hw_detail(hw, lesson)
+
+
+def _hw_detail(hw, lesson: Optional[Lesson]) -> HomeworkDetailResponse:
+    """Homework + его урок -> HomeworkDetailResponse (без обращений к БД).
+
+    В модели Homework нет поля student_id — читаем из родительского урока;
+    model_validate на ORM-объекте упадёт (missing field), поэтому dict вручную.
+    """
     data = {
         "id": hw.id,
         "lesson_id": hw.lesson_id,
@@ -118,10 +125,12 @@ async def list_student_homeworks(
     current_user: User = Depends(require_student_or_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> List[HomeworkDetailResponse]:
-    """Список ДЗ ученика одним запросом (устранён N+1)."""
+    """Список ДЗ ученика ОДНИМ запросом (устранён N+1).
+
+    Раньше здесь был цикл `_detail(hw.id)` на каждое ДЗ — по 2 дополнительных
+    запроса (homework + lesson) на элемент. Теперь уроки подтягиваются тем же
+    JOIN-запросом, что и сами ДЗ.
+    """
     service = HomeworkService()
-    hws = await service.get_student_homeworks(session, student_id)
-    result: List[HomeworkDetailResponse] = []
-    for hw in hws:
-        result.append(await _detail(service, session, hw.id))
-    return result
+    pairs = await service.get_student_homeworks_with_lessons(session, student_id)
+    return [_hw_detail(hw, lesson) for hw, lesson in pairs]

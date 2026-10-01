@@ -1,6 +1,7 @@
 import enum
 import logging
 from typing import Optional
+from urllib.parse import quote_plus
 
 from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -201,10 +202,19 @@ class Settings(BaseSettings):
         return url
 
     def build_database_url(self) -> str:
-        """Сборка async-URL для подключения к базе данных (asyncpg)."""
+        """Сборка async-URL для подключения к базе данных (asyncpg).
+
+        Логин/пароль обязательно URL-кодируются (quote_plus): без этого
+        спецсимволы в пароле («@», «/», «#», «%») ломают разбор URL —
+        asyncpg подключался не к той БД или падал с неверным хостом.
+        Явный DATABASE_URL (db_url) возвращается как есть — предполагается,
+        что он уже закодирован оператором.
+        """
+        user = quote_plus(str(self.db_user))
+        password = quote_plus(str(self.db_password))
         return (
             f"postgresql+asyncpg://"
-            f"{self.db_user}:{self.db_password}"
+            f"{user}:{password}"
             f"@{self.db_host}:{self.db_port}"
             f"/{self.db_name}"
         )

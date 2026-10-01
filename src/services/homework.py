@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import NotFoundError, ValidationError
@@ -14,7 +15,7 @@ from src.db.models import (
     LessonStatusEnum,
     RoleEnum,
 )
-from src.repositories import HomeworkRepository, LessonRepository
+from src.repositories import HomeworkRepository, LessonRepository, UserRepository
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class HomeworkService:
     def __init__(self) -> None:
         self.hw_repo = HomeworkRepository()
         self.lesson_repo = LessonRepository()
+        self.user_repo = UserRepository()
 
     async def assign_homework(
         self,
@@ -99,11 +101,41 @@ class HomeworkService:
         session: AsyncSession,
         student_id: int,
     ) -> list[Homework]:
-        """Все ДЗ ученика одним запросом без N+1."""
-        lesson_ids = await self.lesson_repo.get_lesson_ids_for_student(
-            session, student_id
+        """Все ДЗ ученика без N+1.
+
+        Реализация — ОДИН SQL-запрос (JOIN lessons), а не «список id уроков +
+        IN(...)»: раньше это было 2 запроса, а в эндпоинте /students/{id}/homeworks
+        — полноценный N+1 (запрос на каждый урок).
+
+        Дополнительно проверяется существование ученика с ролью student:
+        иначе GET /students/{несуществующий}/homeworks возвращал бы 200 [],
+        хотя по REST-семантике здесь обязано быть 404 (как в /schedule и
+        /balance). Ученик подтягивается тем же запросом, что и ДЗ (JOIN users),
+        поэтому общее число SELECT не растёт — N+1 по-прежнему нет.
+        """
+        pairs = await self.hw_repo.get_for_student_with_user(session, student_id)
+        if pairs is None:
+            raise NotFoundError(f"Ученик {student_id} не найден")
+        return [hw for hw, _user in pairs]
+
+    async def get_student_homeworks_with_lessons(
+        self,
+        session: AsyncSession,
+        student_id: int,
+    ) -> list[tuple[Homework, Optional[Lesson]]]:
+        """ДЗ ученика + родительские уроки ОДНИМ запросом (eager load).
+
+        Для эндпоинтов, которым нужен student_id из урока: без этого списка
+        вызывающий код делает по одному запросу на каждое ДЗ (N+1).
+        """
+        stmt = (
+            select(Homework, Lesson)
+            .join(Lesson, Homework.lesson_id == Lesson.id)
+            .where(Lesson.student_id == student_id)
+            .order_by(Homework.deadline)
         )
-        return await self.hw_repo.get_by_lesson_ids(session, lesson_ids)
+        result = await session.execute(stmt)
+        return [(row[0], row[1]) for row in result.all()]
 
     async def get_overdue_for_lesson(
         self,

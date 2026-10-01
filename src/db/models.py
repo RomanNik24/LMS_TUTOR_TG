@@ -81,7 +81,12 @@ class Lesson(Base):
     subject: Mapped[str] = mapped_column(String)
     start_time: Mapped[datetime] = mapped_column(DateTime)
     end_time: Mapped[datetime] = mapped_column(DateTime)
-    status: Mapped[LessonStatusEnum] = mapped_column(Enum(LessonStatusEnum))
+    # default=scheduled: создание урока без явного статуса — законный сценарий
+    # (seed, тесты, прямые вставки через репозиторий); бизнес-логика LessonService
+    # статус передаёт явно.
+    status: Mapped[LessonStatusEnum] = mapped_column(
+        Enum(LessonStatusEnum), default=LessonStatusEnum.scheduled
+    )
     # Ссылки на материалы занятия (docs/01: видеоконференция, онлайн-доска)
     video_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     board_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
