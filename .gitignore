@@ -1,9 +1,1 @@
-# Python bytecode and cache
-__pycache__/
-*.pyc
-# Виртуальное окружение
-.venv/
-venv/
-
-# Загрузки пользователя
-data/uploads/
+(empty output)

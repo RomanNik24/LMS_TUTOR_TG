@@ -41,13 +41,25 @@ class UserService:
         student_id: int,
         delta: int,
     ) -> User:
-        """Ручная корректировка баланса преподавателем (оплата вне системы)."""
+        """
+        Ручная корректировка баланса преподавателем (оплата вне системы).
+
+        Атомарный UPDATE ... SET balance = balance + :delta — параллельные
+        пополнения и списания за уроки не теряют друг друга
+        (нет read-modify-write гонки).
+        """
         await self._get_student(session, student_id)
-        user = await self.user_repo.get_by_id(session, student_id)
-        assert user is not None
-        updated = await self.user_repo.update(
-            session, student_id, balance=user.balance + delta
+        new_balance = await self.user_repo.atomic_adjust_balance(
+            session, student_id, delta
         )
+        if new_balance is None:
+            raise NotFoundError(f"Ученик {student_id} не найден")
+        updated = await self.user_repo.get_by_id(session, student_id)
         assert updated is not None
-        logger.info("Balance of student %s changed by %d", student_id, delta)
+        logger.info(
+            "Balance of student %s changed by %d (new: %d)",
+            student_id,
+            delta,
+            new_balance,
+        )
         return updated

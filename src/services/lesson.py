@@ -134,34 +134,39 @@ class LessonService:
 
         Баланс может уйти в минус — это сигнал «должника» для дашборда
         (docs/01, п.4.2: приём платежей вне системы, учёт вручную).
+
+        Гонки исключены на уровне СУБД:
+        - статус меняется условным UPDATE ... WHERE status='scheduled'
+          (mark_completed_atomic) — при параллельном ручном /complete и
+          cron-автозакрытии ровно один вызов считает урок завершённым;
+        - баланс меняется атомарно UPDATE ... SET balance = balance - 1
+          (atomic_adjust_balance), без read-modify-write.
+        Оба запроса выполняются в одной транзакции сессии.
         """
         lesson = await self.lesson_repo.get_by_id(session, lesson_id)
         if not lesson:
             raise NotFoundError(f"Урок {lesson_id} не найден")
-        if lesson.status == LessonStatusEnum.completed:
-            raise ValidationError("Урок уже проведён")
         if lesson.status == LessonStatusEnum.cancelled:
             raise ValidationError("Отменённый урок нельзя провести")
 
-        # Повторно читаем ученика с блокировкой строки на Postgres
-        # (для SQLite в тестах — обычное чтение)
-        student = await self.user_repo.get_by_id(session, lesson.student_id)
-        if student is None:
+        # Атомарный переход scheduled -> completed. None => урок уже
+        # завершён конкурентным вызовом (или изменился его статус).
+        updated = await self.lesson_repo.mark_completed_atomic(session, lesson_id)
+        if updated is None:
+            raise ValidationError("Урок уже проведён")
+
+        new_balance = await self.user_repo.atomic_adjust_balance(
+            session, lesson.student_id, -1
+        )
+        if new_balance is None:
             raise NotFoundError("Ученик урока не найден")
 
-        await self.lesson_repo.update(
-            session, lesson_id, status=LessonStatusEnum.completed
-        )
-        await self.user_repo.update(
-            session, student.id, balance=student.balance - 1
-        )
         logger.info(
-            "Lesson %s completed, balance of student %s decremented",
+            "Lesson %s completed, balance of student %s set to %d",
             lesson_id,
-            student.id,
+            lesson.student_id,
+            new_balance,
         )
-        updated = await self.lesson_repo.get_by_id(session, lesson_id)
-        assert updated is not None
         return updated
 
     async def process_finished_lessons(

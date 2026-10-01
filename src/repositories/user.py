@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import User, RoleEnum
@@ -32,3 +32,27 @@ class UserRepository(BaseRepository[User]):
         stmt = select(self.model).where(self.model.role == role)
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    async def atomic_adjust_balance(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        delta: int,
+    ) -> Optional[int]:
+        """
+        Атомарное изменение баланса одним запросом:
+        UPDATE users SET balance = balance + :delta WHERE id = :id.
+
+        Никакого read-modify-write — гонка между параллельными пополнениями
+        (ручная оплата в админке) исключена на уровне СУБД.
+        Возвращает новый баланс или None, если пользователь не найден.
+        """
+        stmt = (
+            update(self.model)
+            .where(self.model.id == user_id)
+            .values(balance=self.model.balance + delta)
+            .returning(self.model.balance)
+        )
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.scalar_one_or_none()

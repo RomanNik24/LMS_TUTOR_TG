@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Lesson, LessonStatusEnum
@@ -11,6 +11,29 @@ from .base import BaseRepository
 class LessonRepository(BaseRepository[Lesson]):
     def __init__(self):
         super().__init__(Lesson)
+
+    async def mark_completed_atomic(
+        self, session: AsyncSession, lesson_id: int
+    ) -> Optional[Lesson]:
+        """
+        Атомарный переход scheduled -> completed (условный UPDATE).
+
+        WHERE status = 'scheduled' гарантирует, что при параллельных вызовах
+        (ручное /complete из API и cron-автозакрытие из воркера) ровно один
+        запрос обновит строку; второй получит None и не приведёт к повторному
+        списанию баланса. Возвращает обновлённый урок либо None, если урок
+        уже завершён/отменён или не найден.
+        """
+        stmt = (
+            update(self.model)
+            .where(self.model.id == lesson_id)
+            .where(self.model.status == LessonStatusEnum.scheduled)
+            .values(status=LessonStatusEnum.completed)
+            .returning(self.model)
+        )
+        result = await session.execute(stmt)
+        await session.flush()
+        return result.scalar_one_or_none()
 
     async def get_student_lessons(
         self,
