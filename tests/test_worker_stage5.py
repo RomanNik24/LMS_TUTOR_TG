@@ -258,6 +258,26 @@ class TestArqConfiguration:
         # три cron-задачи зарегистрированы
         assert len(WorkerSettings.cron_jobs) == 3
 
+    def test_entrypoint_module_exists_and_runs_worker(self):
+        """Регресс: python -m src.worker должен реально запускать Arq-воркер.
+
+        Раньше __main__.py отсутствовал, а в settings был `await cron(...)` —
+        cron() лишь создаёт описание задачи и не запускает воркер.
+        """
+        import inspect
+        from pathlib import Path
+
+        import src.worker.__main__ as entry
+
+        main_file = Path(entry.__file__).resolve()
+        assert main_file.name == "__main__.py"
+        assert callable(entry.main)
+
+        source = inspect.getsource(entry)
+        # запуск именно через run_worker (CLI-хелпер arq), а не через cron()
+        assert "run_worker" in source
+        assert "WorkerSettings" in source
+
     def test_windows_match_docs(self):
         assert LESSON_WINDOW_MINUTES == 30          # напоминание за 30 минут
         assert HW_DEADLINE_WINDOW_HOURS == 24       # дедлайн ДЗ за сутки

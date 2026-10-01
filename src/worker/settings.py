@@ -32,14 +32,3 @@ class WorkerSettings:
     ]
     max_jobs = 10
     job_timeout = 60
-
-
-async def main() -> None:
-    """Запуск воркера: `python -m src.worker`."""
-    await cron(WorkerSettings)
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())
