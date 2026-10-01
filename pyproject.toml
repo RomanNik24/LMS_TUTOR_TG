@@ -20,6 +20,12 @@ bcrypt = "4.3.0"
 flet = "^1.0.1"
 httpx = "^0.28.1"
 python-jose = {extras = ["cryptography"], version = "^3.5.0"}
+python-multipart = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.1.1"
+pytest-asyncio = "^1.4.0"
+aiosqlite = "*"
 
 [build-system]
 requires = ["poetry-core"]
