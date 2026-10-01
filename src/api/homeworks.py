@@ -35,14 +35,14 @@ def _translate(exc: Exception) -> HTTPException:
 
 
 async def _detail(service: HomeworkService, session: AsyncSession, hw_id: int) -> HomeworkDetailResponse:
-    """Собрать DTO с student_id через урок."""
+    """Собрать DTO с student_id через урок (в модели ДЗ нет student_id)."""
     hw = await service.hw_repo.get_by_id(session, hw_id)
     if not hw:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ДЗ не найдено")
     lesson: Lesson = await service.lesson_repo.get_by_id(session, hw.lesson_id)  # type: ignore[assignment]
-    payload = HomeworkDetailResponse.model_validate(hw)
-    payload.student_id = lesson.student_id if lesson else 0
-    return payload
+    data = HomeworkDetailResponse.model_validate(hw).model_dump()
+    data["student_id"] = lesson.student_id if lesson else 0
+    return HomeworkDetailResponse.model_validate(data)
 
 
 @router.post("/", response_model=HomeworkDetailResponse, status_code=201)

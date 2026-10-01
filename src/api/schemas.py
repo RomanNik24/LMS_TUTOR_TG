@@ -32,8 +32,32 @@ class LessonResponse(BaseModel):
     status: str
     video_url: Optional[str] = None
     board_url: Optional[str] = None
+    # Роль владельца урока — заполняется на уровне API (для UI ученика)
+    role: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class LessonCardItem(BaseModel):
+    """Карточка урока для ученика: урок + привязанные ДЗ (docs/01, п.4.1)."""
+
+    lesson: LessonResponse
+    homeworks: List["HomeworkDetailResponse"] = []
+
+
+class ReportSummaryResponse(BaseModel):
+    """Сводка прогресса ученика для модуля «Отчёты»."""
+
+    lessons_completed: int
+    homeworks_total: int
+    homeworks_graded: int
+    homeworks_avg_score: Optional[float] = None
+    mock_exams_count: int
+    mock_exams_avg_grade: Optional[float] = None
+
+
+class MePasswordRequest(BaseModel):
+    new_password: str
 
 
 class HomeworkResponse(BaseModel):
@@ -132,7 +156,7 @@ class MockExamResponse(BaseModel):
     date: date
     subject: str
     primary_score: int
-    grade: int
+    grade: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

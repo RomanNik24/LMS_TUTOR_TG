@@ -9,6 +9,8 @@ import httpx
 from src.core.config import settings
 from src.db.models import RoleEnum
 
+import ftui_common as ui
+
 
 # ============================================================
 # Точка входа API
@@ -24,6 +26,18 @@ API_BASE_URL = os.getenv("API_BASE_URL", settings.api_base_url)
 # Экран ученика
 # ============================================================
 
+"""Мини-приложение ученика (Student Mini App) — Этап 3.
+
+Экраны по docs/01_project_overview.md, п.4.1:
+- Расписание: карточки занятий с привязанными ДЗ, ссылками на ВКС и доску;
+- Домашние задания: загрузка фото-решений (POST /me/uploads -> submit)
+  и кнопка «Сделал» для устных заданий;
+- Отчёты: сводка прогресса + динамика оценок ДЗ и баллов пробников.
+
+Доступ к данным — только через REST API от имени текущего пользователя
+(эндпоинты /me/* берут id из JWT, без student_id в URL).
+"""
+
 
 def build_student_view(
     page: ft.Page,
@@ -32,179 +46,128 @@ def build_student_view(
 ) -> ft.View:
     """Строит экран ученика."""
 
-    lessons_column = ft.Column(
-        spacing=12,
-        scroll=ft.ScrollMode.AUTO,
-        expand=True,
-    )
+    headers = {"Authorization": f"Bearer {api_token}"}
 
-    hw_column = ft.Column(
-        spacing=12,
-        scroll=ft.ScrollMode.AUTO,
-        expand=True,
-    )
+    # ------------------------------------------------------------
+    # Общие виджеты
+    # ------------------------------------------------------------
+
+    loading_indicator = ft.ProgressRing(visible=True, width=30, height=30)
 
     balance_text = ft.Text(
-        "Баланс: —",
-        size=16,
-        weight=ft.FontWeight.BOLD,
-        color=ft.Colors.WHITE,
+        "Баланс: —", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE
     )
 
-    loading_indicator = ft.ProgressRing(
-        visible=True,
-        width=30,
-        height=30,
-    )
+    def show_snack(msg: str):
+        page.show_dialog(ft.SnackBar(content=ft.Text(msg)))
 
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-    }
+    async def api_get(client: httpx.AsyncClient, path: str, default=None):
+        try:
+            resp = await client.get(path, timeout=10.0)
+            return resp.json() if resp.status_code == 200 else default
+        except Exception:
+            return default
 
-    async def load_data(e=None):
-        loading_indicator.visible = True
-        page.update()
+    # ------------------------------------------------------------
+    # Вкладка 1: Расписание (карточки уроков + ДЗ + ссылки)
+    # ------------------------------------------------------------
 
-        async with httpx.AsyncClient(
-            base_url=API_BASE_URL,
-            headers=headers,
-        ) as client:
-            # ------------------------------------------------
-            # Расписание
-            # ------------------------------------------------
+    schedule_column = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
 
-            try:
-                resp = await client.get(f"/students/{student_id}/schedule")
+    async def load_schedule():
+        async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+            cards = await api_get(client, "/me/lessons?upcoming_only=true", default=[]) or []
 
-                lessons = resp.json() if resp.status_code == 200 else []
+        schedule_column.controls.clear()
 
-            except Exception:
-                lessons = []
+        if not cards:
+            schedule_column.controls.append(
+                ft.Text("Нет запланированных уроков", italic=True, color=ft.Colors.GREY_500)
+            )
 
-            # ------------------------------------------------
-            # Домашние задания
-            # ------------------------------------------------
+        for card in cards:
+            lesson = card.get("lesson", {})
+            homeworks = card.get("homeworks", [])
 
-            try:
-                resp = await client.get(f"/students/{student_id}/homeworks")
+            start = (lesson.get("start_time") or "")[:16].replace("T", " ")
+            end = (lesson.get("end_time") or "")[:16].replace("T", " ")
 
-                homeworks = resp.json() if resp.status_code == 200 else []
-
-            except Exception:
-                homeworks = []
-
-            # ------------------------------------------------
-            # Баланс
-            # ------------------------------------------------
-
-            try:
-                resp = await client.get(f"/students/{student_id}/balance")
-
-                bal = (
-                    resp.json().get("balance", "—") if resp.status_code == 200 else "—"
+            links_row_children = []
+            if lesson.get("video_url"):
+                links_row_children.append(
+                    ft.IconButton(
+                        icon=ft.Icons.VIDEOCAMERA,
+                        tooltip="Видеосвязь",
+                        on_click=lambda e, u=lesson["video_url"]: page.launch_url(u),
+                    )
+                )
+            if lesson.get("board_url"):
+                links_row_children.append(
+                    ft.IconButton(
+                        icon=ft.Icons.WHITEBOARD,
+                        tooltip="Онлайн-доска",
+                        on_click=lambda e, u=lesson["board_url"]: page.launch_url(u),
+                    )
                 )
 
-            except Exception:
-                bal = "—"
-
-        balance_text.value = f"Баланс: {bal} ₽"
-
-        # ----------------------------------------------------
-        # Уроки
-        # ----------------------------------------------------
-
-        lessons_column.controls.clear()
-
-        if not lessons:
-            lessons_column.controls.append(
-                ft.Text(
-                    "Нет запланированных уроков",
-                    italic=True,
-                    color=ft.Colors.GREY_500,
+            hw_children = []
+            for hw in homeworks:
+                hw_children.append(
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ui.hw_icon(hw.get("status")), size=16,
+                                        color=ui.hw_color(hw.get("status"))),
+                                ft.Text(
+                                    f"ДЗ: {hw.get('description', '')[:70]}",
+                                    size=12,
+                                    expand=True,
+                                ),
+                                ft.Text(
+                                    f"оценка: {hw['score']}" if hw.get("score") else "не оценено",
+                                    size=11,
+                                    italic=True,
+                                    color=ui.hw_color(hw.get("status")),
+                                ),
+                            ],
+                            spacing=6,
+                        ),
+                        padding=ft.Padding(8, 4, 8, 4),
+                        bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.BLUE),
+                        border_radius=8,
+                    )
                 )
-            )
 
-        for lesson in lessons:
-            status = lesson.get(
-                "status",
-                "",
-            )
-
-            status_color = {
-                "scheduled": ft.Colors.BLUE,
-                "completed": ft.Colors.GREEN,
-                "cancelled": ft.Colors.RED,
-            }.get(
-                status,
-                ft.Colors.GREY,
-            )
-
-            start = lesson.get(
-                "start_time",
-                "",
-            )[:16].replace("T", "  ")
-
-            end = lesson.get(
-                "end_time",
-                "",
-            )[:16].replace("T", "  ")
-
-            lessons_column.controls.append(
+            schedule_column.controls.append(
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column(
                             [
                                 ft.Row(
                                     [
-                                        ft.Icon(
-                                            ft.Icons.BOOK,
-                                            color=ft.Colors.BLUE_700,
-                                        ),
-                                        ft.Text(
-                                            lesson.get(
-                                                "subject",
-                                                "—",
-                                            ),
-                                            size=18,
-                                            weight=ft.FontWeight.BOLD,
-                                        ),
-                                        ft.Container(
-                                            expand=True,
-                                        ),
-                                        ft.Container(
-                                            content=ft.Text(
-                                                status.upper(),
-                                                size=11,
-                                                color=ft.Colors.WHITE,
-                                                weight=ft.FontWeight.BOLD,
-                                            ),
-                                            bgcolor=status_color,
-                                            border_radius=12,
-                                            padding=ft.Padding.symmetric(
-                                                horizontal=10,
-                                                vertical=4,
-                                            ),
-                                        ),
+                                        ft.Icon(ft.Icons.BOOK, color=ft.Colors.BLUE_700),
+                                        ft.Text(lesson.get("subject", "—"),
+                                              size=17, weight=ft.FontWeight.BOLD),
+                                        ft.Container(expand=True),
+                                        ui.status_chip(lesson.get("status", "")),
                                     ],
-                                ),
-                                ft.Divider(
-                                    height=1,
                                 ),
                                 ft.Row(
                                     [
-                                        ft.Icon(
-                                            ft.Icons.ACCESS_TIME,
-                                            size=14,
-                                            color=ft.Colors.GREY_600,
-                                        ),
-                                        ft.Text(
-                                            f"{start}  →  {end}",
-                                            size=13,
-                                            color=ft.Colors.GREY_700,
-                                        ),
+                                        ft.Icon(ft.Icons.ACCESS_TIME, size=14,
+                                                color=ft.Colors.GREY_600),
+                                        ft.Text(f"{start} → {end}", size=13,
+                                                color=ft.Colors.GREY_700),
+                                        ft.Container(expand=True),
+                                        *links_row_children,
                                     ],
                                 ),
-                            ]
+                                *(hw_children or [
+                                    ft.Text("Домашнее задание не задано", size=12,
+                                            italic=True, color=ft.Colors.GREY_400)
+                                ]),
+                            ],
+                            spacing=6,
                         ),
                         padding=14,
                     ),
@@ -212,100 +175,158 @@ def build_student_view(
                 )
             )
 
-        # ----------------------------------------------------
-        # Домашние задания
-        # ----------------------------------------------------
+    # ------------------------------------------------------------
+    # Вкладка 2: Домашние задания (сдача файлов / «Сделал»)
+    # ------------------------------------------------------------
 
-        hw_column.controls.clear()
+    homeworks_column = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
 
-        if not homeworks:
-            hw_column.controls.append(
-                ft.Text(
-                    "Нет домашних заданий",
-                    italic=True,
-                    color=ft.Colors.GREY_500,
+    file_picker = ft.FilePicker()
+    page.overlay.append(file_picker)
+
+    picked_state = {"path": None, "name": None, "homework_id": None}
+
+    async def upload_and_submit():
+        hw_id = picked_state["homework_id"]
+        path = picked_state["path"]
+        if not hw_id or not path:
+            return
+        try:
+            async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+                with open(path, "rb") as fh:
+                    resp = await client.post(
+                        "/me/uploads",
+                        files={"file": (os.path.basename(path), fh.read())},
+                        timeout=30.0,
+                    )
+                if resp.status_code != 201:
+                    show_snack(f"Ошибка загрузки: {resp.text[:120]}")
+                    return
+                file_url = resp.json().get("file_url")
+
+                resp = await client.post(
+                    f"/homeworks/{hw_id}/submit",
+                    json={"file_url": file_url},
+                    timeout=10.0,
                 )
-            )
-
-        for hw in homeworks:
-            hw_status = hw.get(
-                "status",
-                "",
-            )
-
-            hw_icon = {
-                "pending": ft.Icons.HOURGLASS_EMPTY,
-                "submitted": ft.Icons.UPLOAD_FILE,
-                "graded": ft.Icons.CHECK_CIRCLE,
-            }.get(
-                hw_status,
-                ft.Icons.HELP_OUTLINE,
-            )
-
-            hw_color = {
-                "pending": ft.Colors.ORANGE,
-                "submitted": ft.Colors.BLUE,
-                "graded": ft.Colors.GREEN,
-            }.get(
-                hw_status,
-                ft.Colors.GREY,
-            )
-
-            deadline = hw.get(
-                "deadline",
-                "",
-            )[:16].replace("T", "  ")
-
-            if hw.get("score"):
-                score_text = f"Оценка: {hw['score']}"
+            if resp.status_code == 200:
+                show_snack("Решение отправлено ✅")
+                await render_homeworks()
+                page.update()
             else:
-                score_text = "Ещё не оценено"
+                show_snack(f"Не удалось сдать: {resp.text[:120]}")
+        except Exception as exc:
+            show_snack(f"Сбой отправки: {exc}")
 
-            hw_column.controls.append(
+    def on_file_picker_result(r: ft.FilePickerResultEvent):
+        if r.files:
+            picked_state["path"] = r.files[0].path
+            picked_state["name"] = r.files[0].name
+            page.run_task(upload_and_submit)
+        else:
+            show_snack("Файл не выбран")
+
+    file_picker.on_result = on_file_picker_result
+
+    def open_file_picker(homework_id: int):
+        picked_state["homework_id"] = homework_id
+        picked_state["path"] = None
+        picked_state["name"] = None
+        file_picker.pick_files(
+            allow_multiple=False,
+            allowed_extensions=["jpg", "jpeg", "png", "webp", "pdf", "txt", "docx"],
+            dialog_title="Выберите файл решения",
+        )
+
+    async def mark_done(hw_id: int):
+        try:
+            async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+                resp = await client.post(
+                    f"/homeworks/{hw_id}/submit", json={}, timeout=10.0
+                )
+            if resp.status_code == 200:
+                show_snack("Отмечено как выполненное ✅")
+                await render_homeworks()
+                page.update()
+            else:
+                show_snack(f"Ошибка: {resp.text[:120]}")
+        except Exception as exc:
+            show_snack(f"Сбой: {exc}")
+
+    async def render_homeworks():
+        async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+            hws = await api_get(client, "/me/reports/homework-scores", default=[]) or []
+
+        homeworks_column.controls.clear()
+
+        if not hws:
+            homeworks_column.controls.append(
+                ft.Text("Домашних заданий нет", italic=True, color=ft.Colors.GREY_500)
+            )
+            return
+
+        for hw in hws:
+            status = hw.get("status", "")
+            deadline = (hw.get("deadline") or "")[:16].replace("T", " ")
+            score_text = f"Оценка: {hw['score']}" if hw.get("score") else "Ещё не оценено"
+
+            actions = []
+            if status == "pending":
+                actions = [
+                    ft.FilledButton(
+                        "Загрузить решение",
+                        icon=ft.Icons.UPLOAD_FILE,
+                        height=36,
+                        text_size=12,
+                        on_click=lambda e, hid=hw["id"]: open_file_picker(hid),
+                    ),
+                    ft.OutlinedButton(
+                        "Сделал",
+                        icon=ft.Icons.CHECK,
+                        height=36,
+                        text_size=12,
+                        on_click=lambda e, hid=hw["id"]: page.run_task(mark_done, hid),
+                    ),
+                ]
+            elif status == "submitted":
+                actions = [
+                    ft.Text("На проверке у преподавателя", size=12,
+                            italic=True, color=ft.Colors.BLUE),
+                ]
+
+            submitted_note = (
+                ft.Text(f"Файл сдан", size=11, color=ft.Colors.GREY_600)
+                if hw.get("student_file_url") and status != "pending"
+                else None
+            )
+
+            homeworks_column.controls.append(
                 ft.Card(
                     content=ft.Container(
                         content=ft.Column(
                             [
                                 ft.Row(
                                     [
-                                        ft.Icon(
-                                            hw_icon,
-                                            color=hw_color,
-                                        ),
-                                        ft.Text(
-                                            hw.get(
-                                                "description",
-                                                "—",
-                                            )[:60],
-                                            size=15,
-                                            weight=ft.FontWeight.W_500,
-                                        ),
+                                        ft.Icon(ui.hw_icon(status), color=ui.hw_color(status)),
+                                        ft.Text(hw.get("description", "—")[:90],
+                                              size=14, weight=ft.FontWeight.W_500,
+                                              expand=True),
+                                        ft.Text(score_text, size=12, italic=True,
+                                              color=ui.hw_color(status)),
                                     ],
                                 ),
                                 ft.Row(
                                     [
-                                        ft.Icon(
-                                            ft.Icons.CALENDAR_TODAY,
-                                            size=13,
-                                            color=ft.Colors.GREY_600,
-                                        ),
-                                        ft.Text(
-                                            f"Дедлайн: {deadline}",
-                                            size=12,
-                                            color=ft.Colors.GREY_700,
-                                        ),
-                                        ft.Container(
-                                            expand=True,
-                                        ),
-                                        ft.Text(
-                                            score_text,
-                                            size=12,
-                                            italic=True,
-                                            color=hw_color,
-                                        ),
-                                    ],
+                                        ft.Icon(ft.Icons.CALENDAR_TODAY, size=13,
+                                                color=ft.Colors.GREY_600),
+                                        ft.Text(f"Дедлайн: {deadline}", size=12,
+                                                color=ft.Colors.GREY_700),
+                                    ]
+                                    + ([submitted_note] if submitted_note else []),
                                 ),
-                            ]
+                                *([ft.Row(actions, spacing=8)] if actions else []),
+                            ],
+                            spacing=6,
                         ),
                         padding=12,
                     ),
@@ -313,10 +334,214 @@ def build_student_view(
                 )
             )
 
+    # ------------------------------------------------------------
+    # Вкладка 3: Отчёты (сводка + динамики)
+    # ------------------------------------------------------------
+
+    reports_column = ft.Column(spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
+
+    async def load_reports():
+        async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+            summary = await api_get(client, "/me/reports", default={}) or {}
+            exams = await api_get(client, "/me/reports/mock-exams", default=[]) or []
+            hw_scores = await api_get(client, "/me/reports/homework-scores", default=[]) or []
+
+        reports_column.controls.clear()
+
+        def stat_tile(title: str, value, icon: str, color):
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Icon(icon, size=22, color=color),
+                        ft.Text(str(value if value is not None else "—"),
+                              size=20, weight=ft.FontWeight.BOLD),
+                        ft.Text(title, size=11, color=ft.Colors.GREY_600),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=2,
+                ),
+                padding=10,
+                border_radius=12,
+                bgcolor=ft.Colors.with_opacity(0.06, color),
+                expand=True,
+            )
+
+        reports_column.controls.append(
+            ft.Row(
+                [
+                    stat_tile("Уроков проведено", summary.get("lessons_completed"),
+                              ft.Icons.EVENT_AVAILABLE, ft.Colors.GREEN),
+                    stat_tile("Средний балл ДЗ", summary.get("homeworks_avg_score"),
+                              ft.Icons.ASSIGNMENT, ft.Colors.BLUE),
+                    stat_tile("Средняя отметка пробников",
+                              summary.get("mock_exams_avg_grade"),
+                              ft.Icons.SCHOOL, ft.Colors.PURPLE),
+                ],
+                spacing=8,
+            )
+        )
+
+        reports_column.controls.append(
+            ft.Text(
+                f"ДЗ: всего {summary.get('homeworks_total', 0)}, "
+                f"оценено {summary.get('homeworks_graded', 0)} · "
+                f"пробников: {summary.get('mock_exams_count', 0)}",
+                size=12, color=ft.Colors.GREY_700,
+            )
+        )
+
+        # --- График оценок ДЗ (столбики) ---
+        bars = []
+        for h in hw_scores:
+            if not h.get("score"):
+                continue
+            try:
+                val = float(h["score"])
+            except ValueError:
+                continue
+            bars.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(h["score"], size=10,
+                                  weight=ft.FontWeight.BOLD,
+                                  color=ft.Colors.BLUE_900),
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    height=max(6, min(val, 5) * 18),
+                    width=26,
+                    bgcolor=ft.Colors.BLUE_200,
+                    border_radius=4,
+                )
+            )
+        if bars:
+            reports_column.controls.append(
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Динамика оценок ДЗ", size=14,
+                                      weight=ft.FontWeight.BOLD),
+                                ft.Row(bars[-15:], alignment=ft.MainAxisAlignment.START,
+                                      spacing=6,
+                                      scroll=ft.ScrollMode.AUTO),
+                            ]
+                        ),
+                        padding=12,
+                    )
+                )
+            )
+
+        # --- Таблица пробников ---
+        if exams:
+            reports_column.controls.append(
+                ft.Card(
+                    content=ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Пробные экзамены", size=14,
+                                      weight=ft.FontWeight.BOLD),
+                                ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Container(ft.Text(c), expand=True,
+                                                           weight=ft.FontWeight.BOLD,
+                                                           size=12)
+                                                for c in ("Дата", "Предмет", "Баллы", "Отметка")
+                                            ]
+                                        ),
+                                        *[
+                                            ft.Row(
+                                                [
+                                                    ft.Container(ft.Text(str(ex.get("date", ""))),
+                                                               expand=True, size=12),
+                                                    ft.Container(ft.Text(ex.get("subject", "—")),
+                                                               expand=True, size=12),
+                                                    ft.Container(ft.Text(str(ex.get("primary_score", "—"))),
+                                                               expand=True, size=12),
+                                                    ft.Container(
+                                                        ft.Text(str(ex.get("grade", "—")),
+                                                              weight=ft.FontWeight.BOLD,
+                                                              color=ui.grade_color(ex.get("grade"))),
+                                                        expand=True, size=12),
+                                                ]
+                                            )
+                                            for ex in exams
+                                        ],
+                                    ],
+                                    spacing=4,
+                                ),
+                            ]
+                        ),
+                        padding=12,
+                    )
+                )
+            )
+        else:
+            reports_column.controls.append(
+                ft.Text("Пробников пока не было", italic=True,
+                       color=ft.Colors.GREY_500)
+            )
+
+        page.update()
+
+    # ------------------------------------------------------------
+    # Табы
+    # ------------------------------------------------------------
+
+    def on_tab_change(e: ft.ControlEvent):
+        if e.control.selected_index == 1:
+            page.run_task(render_homeworks)
+        elif e.control.selected_index == 2:
+            page.run_task(load_reports)
+
+    tabs = ft.Tabs(
+        selected_index=0,
+        animation_duration=200,
+        expand=True,
+        tabs=[
+            ft.Tab(
+                text="Расписание",
+                icon=ft.Icons.EVENT,
+                content=ft.Container(
+                    content=schedule_column, padding=ft.Padding(12, 8, 12, 8)
+                ),
+            ),
+            ft.Tab(
+                text="Домашние задания",
+                icon=ft.Icons.ASSIGNMENT,
+                content=ft.Container(
+                    content=homeworks_column,
+                    padding=ft.Padding(12, 8, 12, 8),
+                ),
+            ),
+            ft.Tab(
+                text="Отчёты",
+                icon=ft.Icons.INSIGHTS,
+                content=ft.Container(content=reports_column,
+                                     padding=ft.Padding(12, 8, 12, 8)),
+            ),
+        ],
+        on_change=on_tab_change,
+    )
+
+    async def load_all(e=None):
+        loading_indicator.visible = True
+        page.update()
+
+        async with httpx.AsyncClient(base_url=API_BASE_URL, headers=headers) as client:
+            me = await api_get(client, "/me", default={}) or {}
+        balance_text.value = f"Баланс: {me.get('balance', '—')} занятий"
+
+        await load_schedule()
+
         loading_indicator.visible = False
         page.update()
 
-    page.run_task(load_data)
+    page.run_task(load_all)
 
     return ft.View(
         "/student",
@@ -326,40 +551,15 @@ def build_student_view(
                 bgcolor=ft.Colors.BLUE_700,
                 color=ft.Colors.WHITE,
                 actions=[
-                    ft.Container(
-                        content=balance_text,
-                        padding=ft.Padding.only(right=16),
-                    ),
+                    ft.Container(content=balance_text,
+                                 padding=ft.Padding.only(right=16)),
                 ],
             ),
-            ft.Container(
-                content=ft.Column(
-                    [
-                        loading_indicator,
-                        ft.Text(
-                            "📚 Мои уроки",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                        ),
-                        lessons_column,
-                        ft.Divider(height=20),
-                        ft.Text(
-                            "📝 Мои домашние задания",
-                            size=20,
-                            weight=ft.FontWeight.BOLD,
-                        ),
-                        hw_column,
-                    ],
-                    spacing=8,
-                    scroll=ft.ScrollMode.AUTO,
-                    expand=True,
-                ),
-                padding=16,
-                expand=True,
-            ),
+            ft.Container(content=loading_indicator, alignment=ft.Alignment.CENTER),
+            tabs,
             ft.FloatingActionButton(
                 icon=ft.Icons.REFRESH,
-                on_click=load_data,
+                on_click=load_all,
                 tooltip="Обновить",
             ),
         ],
