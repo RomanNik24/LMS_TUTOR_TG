@@ -1,12 +1,10 @@
 from typing import Callable, Dict, Any, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import Message
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
+from src.db.session import async_session_maker
 
-engine = create_async_engine(settings.database_url, echo=False)
-async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 class DbSessionMiddleware(BaseMiddleware):
     async def __call__(

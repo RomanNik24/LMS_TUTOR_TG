@@ -1,17 +1,15 @@
 import asyncio
 from datetime import datetime, timedelta
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.db.base import Base
 from src.db.models import RoleEnum, LessonStatusEnum, HomeworkStatusEnum
+from src.db.session import engine, async_session_maker
 from src.repositories import UserRepository, LessonRepository, HomeworkRepository
 from src.services.auth import AuthService
 
 async def main():
-    # Создаем асинхронный движок и фабрику сессий
-    engine = create_async_engine(settings.database_url, echo=False)
-    async_session = async_sessionmaker(engine, expire_on_commit=False)
 
     # Принудительно создаем таблицы, чтобы скрипт сработал даже если миграции не применены
     async with engine.begin() as conn:
@@ -23,7 +21,7 @@ async def main():
     hw_repo = HomeworkRepository()
     auth = AuthService()
 
-    async with async_session() as session:
+    async with async_session_maker() as session:
         # 1. Создаем преподавателя (пароль: admin123)
         admin = await user_repo.create(
             session=session,

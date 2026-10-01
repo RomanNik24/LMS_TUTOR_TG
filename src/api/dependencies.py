@@ -3,31 +3,17 @@ from collections.abc import AsyncGenerator
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.db.models import RoleEnum, User
+from src.db.session import get_async_session
 from src.repositories import UserRepository
 from src.services.auth import AuthService
 
 
-engine = create_async_engine(
-    settings.database_url,
-    echo=False,
-)
-
-async_session_maker = async_sessionmaker(
-    engine,
-    expire_on_commit=False,
-)
-
-
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with async_session_maker() as session:
+    async for session in get_async_session():
         yield session
 
 
