@@ -58,6 +58,10 @@ services:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
       WEBAPP_UPSTREAM_URL: http://webapp:8550
+      # Проброс флага окружения из хоста (по умолчанию development).
+      # В production задайте ENVIRONMENT=production в .env — тогда сервисы
+      # не стартуют с дефолтными секретами (см. src/core/config.py).
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     ports:
       - "8000:8000"
     depends_on:
@@ -77,6 +81,7 @@ services:
     environment:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
       postgres:
         condition: service_healthy
@@ -93,6 +98,7 @@ services:
     env_file: .env
     environment:
       API_BASE_URL: http://api:8000
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
       - api
 
@@ -106,6 +112,7 @@ services:
     environment:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     depends_on:
       postgres:
         condition: service_healthy
