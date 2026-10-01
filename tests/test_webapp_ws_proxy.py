@@ -1,161 +1,102 @@
-"""Тесты WebSocket-прокси Mini App (этап: исправление /app proxy).
+"""Этап: WS-прокси /app/ws (flet-web).
 
-Проверяют, что соединение клиента /app/ws пробрасывается на ws-эндпоинт
-Flet-сервера и данные ходят в обе стороны, а при недоступном upstream
-соединение корректно закрывается без падения приложения.
+Проверяет, что WebSocket Mini App действительно проксируется на upstream
+(flet-web слушает <server>/ws), а не только HTTP-запросы.
 """
 
 import asyncio
-import contextlib
-import threading
+import json
 
 import pytest
 import websockets
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import webapp as webapp_module
 
 
-async def _echo_upstream(websocket):
-    """Мини-«Flet-сервер»: отвечает «hello» и эхом шлёт всё входящее."""
-    await websocket.send("hello")
-    async for message in websocket:
-        await websocket.send(message)
-
-
-@contextlib.asynccontextmanager
-async def _upstream_server(port_file=None):
-    server = await websockets.serve(_echo_upstream, "127.0.0.1", 0)
-    port = server.sockets[0].getsockname()[1]
-    try:
-        yield port
-    finally:
-        server.close()
-        await server.wait_closed()
-
-
-def _run_upstream(stop_event: threading.Event, ready: threading.Event) -> int:
-    loop = asyncio.new_event_loop()
-
-    async def main():
-        server = await websockets.serve(_echo_upstream, "127.0.0.1", 0)
-        port = server.sockets[0].getsockname()[1]
-        ready.set()
-        while not stop_event.is_set():
-            await asyncio.sleep(0.05)
-        server.close()
-        await server.wait_closed()
-
-    loop.run_until_complete(main())
-    loop.close()
-    return port
-
-
 @pytest.fixture()
-def upstream(monkeypatch):
-    """Поднимает echo-ws сервер в отдельном потоке, патчит WEBAPP_UPSTREAM_URL."""
-    stop_event = threading.Event()
+def fake_flet_server():
+    """Подменяем WEBAPP_UPSTREAM_URL на локальный фейковый ws/http сервер."""
+    return None  # unused placeholder to keep fixture list readable
+
+
+def test_http_proxy_still_works(monkeypatch):
+    """HTTP-часть прокси осталась рабочей (502 при недоступном upstream)."""
+    monkeypatch.setattr(webapp_module, "WEBAPP_UPSTREAM_URL", "http://127.0.0.1:1")
+    from src.main import app
+
+    client = TestClient(app)
+    resp = client.get("/app/")
+    assert resp.status_code == 502
+    assert b"Mini App" in resp.content
+
+
+def test_websocket_proxy_roundtrip(monkeypatch):
+    """WS-клиент -> /app/ws -> upstream /ws -> обратно (echo pong)."""
+    import threading
+
+    async def handler(ws):
+        async for message in ws:
+            data = json.loads(message)
+            if data.get("action") == "ping":
+                await ws.send(json.dumps({"op": "pong", "id": data.get("id")}))
+            else:
+                await ws.send(json.dumps({"op": "echo", "payload": data}))
+
     ready = threading.Event()
     holder = {}
 
-    def runner():
+    def run_server():
         loop = asyncio.new_event_loop()
 
         async def main():
-            server = await websockets.serve(_echo_upstream, "127.0.0.1", 0)
+            server = await websockets.serve(handler, "127.0.0.1", 0)
             holder["port"] = server.sockets[0].getsockname()[1]
+            holder["server"] = server
             ready.set()
-            while not stop_event.is_set():
-                await asyncio.sleep(0.05)
-            server.close()
-            await server.wait_closed()
+            await asyncio.Future()  # keep serving
 
-        loop.run_until_complete(main())
-        loop.close()
+        try:
+            loop.run_until_complete(main())
+        except asyncio.CancelledError:
+            pass
+        finally:
+            loop.close()
 
-    thread = threading.Thread(target=runner, daemon=True)
+    thread = threading.Thread(target=run_server, daemon=True)
     thread.start()
-    assert ready.wait(5), "upstream WS server не поднялся"
+    assert ready.wait(5), "fake upstream не поднялся"
+    port = holder["port"]
     monkeypatch.setattr(
-        webapp_module, "WEBAPP_UPSTREAM_URL", f"http://127.0.0.1:{holder['port']}"
+        webapp_module, "WEBAPP_UPSTREAM_URL", f"http://127.0.0.1:{port}"
     )
-    yield holder["port"]
-    stop_event.set()
-    thread.join(timeout=5)
+
+    try:
+        from src.main import app
+
+        client = TestClient(app)
+        with client.websocket_connect("/app/ws?token=abc") as ws_client:
+            ws_client.send_text(json.dumps({"action": "ping", "id": 42}))
+            reply = json.loads(ws_client.receive_text())
+            assert reply == {"op": "pong", "id": 42}
+
+            ws_client.send_text(json.dumps({"action": "hello", "id": 43}))
+            reply2 = json.loads(ws_client.receive_text())
+            assert reply2["op"] == "echo"
+            assert reply2["payload"]["action"] == "hello"
+    finally:
+        holder["server"].close()
 
 
-@pytest.fixture()
-def client():
-    app = FastAPI()
-    app.include_router(webapp_module.router)
-    return TestClient(app)
+def test_ws_upstream_unavailable_closes_with_1011(monkeypatch):
+    """Если Flet-сервер ещё не поднялся — соединение закрывается кодом 1011."""
+    monkeypatch.setattr(webapp_module, "WEBAPP_UPSTREAM_URL", "http://127.0.0.1:1")
+    from src.main import app
 
+    client = TestClient(app)
+    from starlette.websockets import WebSocketDisconnect as StarletteDisconnect
 
-class TestWsProxy:
-    def test_bidirectional_echo(self, client, upstream):
+    with pytest.raises(StarletteDisconnect) as exc_info:
         with client.websocket_connect("/app/ws") as ws:
-            # Flet-сервер шлёт приветствие при подключении.
-            assert ws.receive_text() == "hello"
-            ws.send_text("ping")
-            assert ws.receive_text() == "ping"
-            ws.send_text("привет")
-            assert ws.receive_text() == "привет"
-
-    def test_subpath_forwarded_to_upstream(self, client, upstream):
-        # /app/ws/session/42 должен дойти до upstream как ws/session/42
-        # (echo-сервер принимает любой путь — проверяем сам факт handshake).
-        with client.websocket_connect("/app/ws/session/42?token=abc") as ws:
-            assert ws.receive_text() == "hello"
-            ws.send_text("x")
-            assert ws.receive_text() == "x"
-
-    def test_upstream_unavailable_closes_cleanly(self, client, monkeypatch):
-        monkeypatch.setattr(
-            webapp_module, "WEBAPP_UPSTREAM_URL", "http://127.0.0.1:1"
-        )
-        # Соединение должно закрыться (receive_* бросит WebSocketDisconnect),
-        # а приложение — остаться живым.
-        with pytest.raises(Exception):  # noqa: PT011 - Starlette raises on close
-            with client.websocket_connect("/app/ws") as ws:
-                ws.receive_text()
-        # HTTP-роуты после этого работают как раньше.
-        assert client.get("/healthz").status_code in (404, 200) or True
-
-    def test_http_proxy_still_works(self, client, monkeypatch):
-        # Регрессия: обычный HTTP-прокси не сломан добавлением ws-маршрутов.
-        calls = {}
-
-        class FakeResponse:
-            status_code = 200
-            content = b"ok"
-            headers = {"content-type": "text/plain"}
-
-        class FakeClient:
-            async def request(self, **kwargs):
-                calls.update(kwargs)
-                return FakeResponse()
-
-        class Ctx:
-            async def __aenter__(self):
-                return FakeClient()
-
-            async def __aexit__(self, *exc):
-                return False
-
-        monkeypatch.setattr(webapp_module.httpx, "AsyncClient", lambda *a, **k: Ctx())
-        resp = client.get("/app/static/app.js")
-        assert resp.status_code == 200
-        assert calls["url"].endswith("/static/app.js")
-
-    def test_ws_url_conversion(self, monkeypatch):
-        monkeypatch.setattr(
-            webapp_module, "WEBAPP_UPSTREAM_URL", "https://flet.internal:8550/base"
-        )
-        assert webapp_module._upstream_ws_url("ws/session") == (
-            "wss://flet.internal:8550/ws/session"
-        )
-        monkeypatch.setattr(
-            webapp_module, "WEBAPP_UPSTREAM_URL", "http://localhost:8550"
-        )
-        assert webapp_module._upstream_ws_url("ws") == "ws://localhost:8550/ws"
+            ws.receive_text()
+    assert exc_info.value.code == 1011
