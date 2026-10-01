@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.admin import router as admin_router
 from src.api.auth import router as auth_router
+from src.api.homeworks import router as homeworks_router
+from src.api.lessons import router as lessons_router
+from src.api.mock_exams import router as mock_exams_router
 from src.api.students import router as students_router
 from src.api.webapp import router as webapp_router
 from src.core.config import settings
@@ -31,6 +35,10 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(students_router)
+    app.include_router(lessons_router)
+    app.include_router(homeworks_router)
+    app.include_router(mock_exams_router)
+    app.include_router(admin_router)
     app.include_router(webapp_router)
 
     @app.get("/")
