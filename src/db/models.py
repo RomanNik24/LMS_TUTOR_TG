@@ -33,6 +33,9 @@ class LessonStatusEnum(str, enum.Enum):
     scheduled = "scheduled"
     completed = "completed"
     cancelled = "cancelled"
+    # Автозакрытие воркера не списывает баланс: урок попадает сюда,
+    # пока преподаватель не подтвердит факт проведения (или не отменит).
+    needs_confirmation = "needs_confirmation"
 
 
 class HomeworkStatusEnum(str, enum.Enum):
