@@ -1,13 +1,1 @@
-# Dependencies
-.venv/
-
-# Compiled and build artifacts
-__pycache__/
-*.pyc
-
-# Загрузки файлов ДЗ (локальные артефакты, не коммитим)
-data/uploads/
-
-# Кэш pytest / mypy
-.pytest_cache/
-.mypy_cache/
+dump.rdb
