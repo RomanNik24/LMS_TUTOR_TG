@@ -15,8 +15,10 @@ __all__ = ["get_db_session", "oauth2_scheme", "get_current_user",
 
 # Используется FastAPI для чтения:
 # Authorization: Bearer <token>
+# Токен выдаётся серверу Mini App после успешной верификации initData
+# (парольного входа в системе нет — docs/09 §2.4).
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="auth/login",
+    tokenUrl="auth/webapp-identify",
 )
 
 

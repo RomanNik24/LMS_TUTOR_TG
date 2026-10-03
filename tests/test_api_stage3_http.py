@@ -1,18 +1,23 @@
-"""HTTP-тесты Этапа 3: эндпоинты личного кабинета /me/*.
+"""HTTP-тесты Этапа 3 + этап безопасности: /me/*, приватные файлы, initData.
 
-Проверяют (docs/01, п.4.1 и docs/06 — правила для агентов):
+Проверяют (docs/01 п.4.1, docs/09):
 - карточки уроков с привязанными ДЗ (без student_id в URL — IDOR исключён);
 - отчёты: сводка, оценки ДЗ, история пробников;
 - загрузку файлов решений (POST /me/uploads) с валидацией типа/размера;
+- приватную выдачу файлов /me/files/... (публичный /uploads удалён);
 - RBAC: без токена — 401.
-Фикстура ``make_client`` из conftest.py поднимает SQLite in-memory.
+Парольных эндпоинтов (/me/password, /auth/login) больше нет — их удаление
+тоже проверяется тестом ниже.
+Фикстура ``make_client`` из conftest.py поднимает SQLite in-memory и fakeredis.
 """
 
+import time
 from datetime import datetime, timedelta
 
 import pytest
 
 from src.api.dependencies import get_current_user
+from src.core.config import settings
 from src.db.models import (
     Homework,
     HomeworkStatusEnum,
@@ -22,25 +27,21 @@ from src.db.models import (
     RoleEnum,
     User,
 )
-from src.services.auth import AuthService
+from conftest import sign_init_data
 
 
 @pytest.fixture
 async def me_client(make_client):
-    """Клиент с залогиненным учеником и наполненной БД."""
+    """Клиент с «залогиненным» учеником и наполненной БД."""
     client, session_maker = make_client
 
-    auth = AuthService()
     async with session_maker() as session:
+        # Паролей в системе нет (docs/09 §2.4) — password_hash не заполняется.
         student = User(
             role=RoleEnum.student, login="pete",
-            password_hash=auth.get_password_hash("secret"),
             balance=5, lesson_price=1000, telegram_id=111,
         )
-        admin = User(
-            role=RoleEnum.admin, login="admin",
-            password_hash=auth.get_password_hash("admin-pass"),
-        )
+        admin = User(role=RoleEnum.admin, login="admin")
         session.add_all([student, admin])
         await session.flush()
 
@@ -73,7 +74,6 @@ async def me_client(make_client):
 
     async def as_student():
         async with session_maker() as s:
-            from src.db.models import User
             return await s.get(User, sid)
 
     client.app = client._transport.app  # type: ignore[attr-defined]
@@ -96,13 +96,10 @@ class TestMeProfile:
         assert data["balance"] == 5
         assert data["id"] == me_client.student_id
 
-    async def test_change_password_too_short_rejected(self, me_client):
-        resp = await me_client.post("/me/password", json={"new_password": "123"})
-        assert resp.status_code == 422
-
-    async def test_change_password_ok(self, me_client):
-        resp = await me_client.post("/me/password", json={"new_password": "newsecret"})
-        assert resp.status_code == 204
+    async def test_password_endpoints_removed(self, me_client):
+        """Смена пароля запрещена ТЗ (docs/09 §2.4) — эндпоинта нет."""
+        resp = await me_client.post("/me/password", json={"new_password": "whatever"})
+        assert resp.status_code == 404
 
 
 class TestMeLessonCards:
@@ -163,7 +160,9 @@ class TestMeUploads:
         )
         assert resp.status_code == 201
         body = resp.json()
-        assert body["file_url"].startswith(f"/uploads/{me_client.student_id}/")
+        # Приватная выдача: путь /me/files/..., а не публичный /uploads/...
+        assert body["file_url"].startswith(f"/me/files/{me_client.student_id}/")
+        assert not body["file_url"].startswith("/uploads/")
         assert body["size"] > 0
 
     async def test_upload_bad_extension_rejected(self, me_client):
@@ -180,7 +179,7 @@ class TestMeUploads:
         )
         assert resp.status_code == 422
 
-    async def test_uploaded_file_is_served(self, me_client):
+    async def test_uploaded_file_is_served_privately(self, me_client):
         resp = await me_client.post(
             "/me/uploads",
             files={"file": ("hw.txt", b"my solution text", "text/plain")},
@@ -189,3 +188,35 @@ class TestMeUploads:
         served = await me_client.get(url)
         assert served.status_code == 200
         assert served.content == b"my solution text"
+        assert "no-store" in served.headers.get("cache-control", "")
+
+    async def test_public_uploads_mount_gone(self, me_client):
+        """Публичная раздача /uploads из main.py удалена (docs/09 §4)."""
+        resp = await me_client.get("/uploads/111/hw.txt")
+        assert resp.status_code == 404
+
+    async def test_other_users_file_not_accessible(self, make_client):
+        """Чужой файл недоступен даже авторизованному пользователю (IDOR)."""
+        client, session_maker = make_client
+        async with session_maker() as session:
+            victim = User(role=RoleEnum.student, login="victim", telegram_id=222)
+            attacker = User(role=RoleEnum.student, login="attacker", telegram_id=333)
+            session.add_all([victim, attacker])
+            await session.commit()
+            vid, aid = victim.id, attacker.id
+
+        from src.services import storage as storage_module
+
+        key = storage_module.storage.save(
+            storage_module.build_key(vid, ".txt"), b"secret homework"
+        )
+
+        async def as_attacker():
+            async with session_maker() as s:
+                return await s.get(User, aid)
+
+        client.app = client._transport.app  # type: ignore[attr-defined]
+        client.app.dependency_overrides[get_current_user] = as_attacker
+
+        resp = await client.get(f"/me/files/{key}")
+        assert resp.status_code == 404

@@ -957,40 +957,43 @@ async def main(page: ft.Page):
     page.title = "MY_LMS WebApp"
     page.theme_mode = ft.ThemeMode.LIGHT
 
-    user_id = None
     db_user = None
     api_token = None
 
     # --------------------------------------------------------
-    # Получаем Telegram WebApp пользователя (telegram_id)
+    # Получаем Telegram WebApp initData (полная подписанная строка)
     # --------------------------------------------------------
+    # Отправляем серверу window.Telegram.WebApp.initData (сырую строку),
+    # а НЕ initDataUnsafe.user.id: сервер проверяет HMAC-подпись Telegram
+    # и извлекает telegram_id только из подписанных данных (docs/09 §2.1).
+
+    init_data = None
 
     try:
-        tg_data_str = await page.evaluate_js_async(
-            "JSON.stringify(window.Telegram?.WebApp?.initDataUnsafe || {})"
+        raw = await page.evaluate_js_async(
+            "window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp.initData : ''"
         )
 
-        if tg_data_str and tg_data_str != "{}":
-            tg_data = json.loads(tg_data_str)
-
-            if "user" in tg_data:
-                user_id = tg_data["user"].get("id")
+        if isinstance(raw, str) and raw.strip():
+            init_data = raw
 
     except Exception:
         pass
 
     # --------------------------------------------------------
     # Получаем пользователя через API (без прямого доступа к БД).
-    # POST /auth/webapp-identify возвращает профиль + JWT-токен.
-    # TODO (Этап безопасности): серверная верификация initData.
+    # POST /auth/webapp-identify верифицирует initData, создаёт
+    # серверную сессию (HttpOnly-cookie) и возвращает профиль.
+    # access_token используется ТОЛЬКО server-side для вызовов API
+    # из этого процесса; в DOM/UI он не кладётся.
     # --------------------------------------------------------
 
-    if user_id:
+    if init_data:
         try:
             async with httpx.AsyncClient(base_url=API_BASE_URL) as client:
                 resp = await client.post(
                     "/auth/webapp-identify",
-                    json={"telegram_id": int(user_id)},
+                    json={"init_data": init_data},
                     timeout=10.0,
                 )
 

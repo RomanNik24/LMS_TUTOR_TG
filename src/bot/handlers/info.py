@@ -20,6 +20,12 @@ from src.db.models import HomeworkStatusEnum, RoleEnum
 from src.repositories import LessonRepository, UserRepository
 from src.services.homework import HomeworkService
 
+GUEST_HINT = (
+    "Аккаунта ещё нет? Попросите преподавателя прислать приглашение — "
+    "откройте ссылку вида t.me/bot?start=inv_XXXX в этом чате."
+)
+
+
 router = Router()
 
 lesson_repo = LessonRepository()
@@ -46,7 +52,7 @@ async def cmd_schedule(message: Message, session: AsyncSession):
     user = await _get_user(message, session)
     if not user:
         await message.answer(
-            "Вы не авторизованы. Авторизуйтесь командой /login.",
+            GUEST_HINT,
             reply_markup=get_guest_keyboard(),
         )
         return
@@ -71,7 +77,7 @@ async def cmd_homeworks(message: Message, session: AsyncSession):
     user = await _get_user(message, session)
     if not user:
         await message.answer(
-            "Вы не авторизованы. Авторизуйтесь командой /login.",
+            GUEST_HINT,
             reply_markup=get_guest_keyboard(),
         )
         return
@@ -109,7 +115,7 @@ async def cmd_app(message: Message, session: AsyncSession):
     user = await _get_user(message, session)
     if not user:
         await message.answer(
-            "Вы не авторизованы. Авторизуйтесь командой /login.",
+            GUEST_HINT,
             reply_markup=get_guest_keyboard(),
         )
         return

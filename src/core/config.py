@@ -58,9 +58,15 @@ class Settings(BaseSettings):
     # выводится из api_base_url (для локальной разработки через туннель).
     webapp_public_url: Optional[str] = None
 
-    # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка)
+    # Загрузка файлов ДЗ (до подключения S3/MinIO — локальная заглушка).
+    # Имя переменной окружения — MAX_UPLOAD_MB (см. .env.example); ранее в
+    # .env.example ошибочно значился MAX_UPLOAD_SIZE_MB, из-за чего настройка
+    # игнорировалась и молча работал дефолт.
+    max_upload_mb: int = 20
+
+    # Каталог локального хранилища загруженных файлов (dev/MVP; см.
+    # src/services/storage.py). В проде заменяется приватным S3-бакетом.
     upload_dir: str = "data/uploads"
-    max_upload_mb: int = 10
 
     model_config = SettingsConfigDict(
         env_file=".env",

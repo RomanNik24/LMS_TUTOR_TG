@@ -33,7 +33,7 @@ from src.db.models import (  # noqa: E402
     RoleEnum,
     User,
 )
-from src.services.auth import AuthService  # noqa: E402
+
 
 
 # ---------------------------------------------------------------------------
@@ -202,27 +202,23 @@ async def db():
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
-    auth = AuthService()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     async with maker() as session:
         student = User(
             role=RoleEnum.student,
             telegram_id=1001,
             login="petrov",
-            password_hash=auth.get_password_hash("secret"),
             balance=10,
         )
         other_student = User(
             role=RoleEnum.student,
             telegram_id=1002,
             login="sidorov",
-            password_hash=auth.get_password_hash("secret"),
         )
         admin = User(
             role=RoleEnum.admin,
             telegram_id=9000,
             login="teacher",
-            password_hash=auth.get_password_hash("secret"),
         )
         session.add_all([student, other_student, admin])
         await session.flush()

@@ -4,11 +4,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from pydantic.aliases import AliasChoices
 
 
-class LoginRequest(BaseModel):
-    login: str
-    password: str
-
-
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -56,8 +51,8 @@ class ReportSummaryResponse(BaseModel):
     mock_exams_avg_grade: Optional[float] = None
 
 
-class MePasswordRequest(BaseModel):
-    new_password: str
+class WebAppLogoutResponse(BaseModel):
+    ok: bool
 
 
 class HomeworkResponse(BaseModel):
@@ -76,8 +71,13 @@ class BalanceResponse(BaseModel):
 
 
 class CreateStudentRequest(BaseModel):
+    """Создание профиля ученика преподавателем.
+
+    Пароля нет (docs/09 §2.4): вход ученик совершает по приглашению,
+    привязывающему его telegram_id.
+    """
+
     login: str
-    password: str
     balance: int = 0
     lesson_price: int = 1000
 
@@ -90,7 +90,16 @@ class CreateLessonRequest(BaseModel):
     board_url: Optional[str] = None
 
 class WebAppIdentifyRequest(BaseModel):
-    telegram_id: int
+    """Запрос входа Mini App.
+
+    ``init_data`` — сырая строка window.Telegram.WebApp.initData; сервер
+    обязательно проверяет её подпись (docs/09 §2.2). ``telegram_id`` —
+    необязательное справочное поле: при несовпадении с подписанным id запрос
+    отклоняется как попытка подмены.
+    """
+
+    init_data: str = Field(min_length=1)
+    telegram_id: Optional[int] = None
 
 
 class WebAppUserBrief(BaseModel):

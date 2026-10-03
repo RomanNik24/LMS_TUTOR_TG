@@ -27,7 +27,6 @@ from src.repositories import (
     LessonRepository,
     UserRepository,
 )
-from src.services.auth import AuthService
 
 
 router = APIRouter(
@@ -197,7 +196,6 @@ async def create_student(
     Доступно только администратору.
     """
 
-    auth = AuthService()
     user_repo = UserRepository()
 
     existing = await user_repo.get_by_login(
@@ -211,11 +209,12 @@ async def create_student(
             detail="Логин уже занят",
         )
 
+    # Пароля у профиля нет (docs/09 §2.4): вход ученика — по приглашению,
+    # привязывающему telegram_id. Колонка password_hash не заполняется.
     user = await user_repo.create(
         session=session,
         role=RoleEnum.student,
         login=data.login,
-        password_hash=auth.get_password_hash(data.password),
         balance=data.balance,
         lesson_price=data.lesson_price,
     )

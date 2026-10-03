@@ -54,5 +54,8 @@ def render_catalog() -> str:
         lines.append(item.description)
         lines.append(f"<i>{item.price_hint}</i>")
         lines.append("")
-    lines.append("Для записи авторизуйтесь командой /login и откройте приложение.")
+    lines.append(
+        "Для записи попросите преподавателя прислать приглашение "
+        "(ссылка вида t.me/bot?start=inv_XXXX) и откройте приложение."
+    )
     return "\n".join(lines).strip()

@@ -53,7 +53,10 @@ class User(Base):
         BigInteger, nullable=True, unique=True
     )
     login: Mapped[str] = mapped_column(String, unique=True)
-    password_hash: Mapped[str] = mapped_column(String)
+    # Пароли не используются (docs/09 §2.4): вход только по приглашениям и
+    # верифицированной initData. Колонка оставлена nullable для совместимости
+    # с существующей БД; новый код её не читает и не пишет.
+    password_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     balance: Mapped[int] = mapped_column(Integer, default=0)
     lesson_price: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(
@@ -107,6 +110,39 @@ class Homework(Base):
     )
 
     lesson: Mapped["Lesson"] = relationship(back_populates="homeworks")
+
+
+class AuthTokenPurposeEnum(str, enum.Enum):
+    invite = "invite"
+
+
+class AuthToken(Base):
+    """Одноразовые токены приглашений (docs/04 §auth_tokens, docs/09 §2.4).
+
+    В БД хранится ТОЛЬКО SHA-256 хэш токена — сырое значение известно лишь
+    моменту выдачи (ссылка t.me/<bot>?start=inv_<token>). TTL — 7 дней,
+    использование — однократное (used_at), отзыв — revoked_at.
+    """
+
+    __tablename__ = "auth_tokens"
+    __table_args__ = (Index("ix_auth_tokens_user_purpose", "user_id", "purpose"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    purpose: Mapped[AuthTokenPurposeEnum] = mapped_column(
+        Enum(AuthTokenPurposeEnum, name="authtokenpurpose"),
+        default=AuthTokenPurposeEnum.invite,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    issued_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, server_default=func.now()
+    )
 
 
 class MockExam(Base):

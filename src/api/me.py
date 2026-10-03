@@ -15,7 +15,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.dependencies import get_current_user, get_db_session
@@ -23,7 +31,6 @@ from src.api.schemas import (
     HomeworkDetailResponse,
     LessonCardItem,
     LessonResponse,
-    MePasswordRequest,
     MockExamResponse,
     ReportSummaryResponse,
     UserResponse,
@@ -31,7 +38,7 @@ from src.api.schemas import (
 from src.core.config import settings
 from src.db.models import Homework, HomeworkStatusEnum, Lesson, User
 from src.repositories import HomeworkRepository, LessonRepository, MockExamRepository
-from src.services.auth import AuthService
+from src.services import storage
 
 logger = logging.getLogger(__name__)
 
@@ -47,24 +54,6 @@ async def me(
 ) -> UserResponse:
     """Текущий пользователь: id, логин, баланс, цена занятия."""
     return UserResponse.model_validate(current_user)
-
-
-@router.post("/password", status_code=204)
-async def change_password(
-    data: MePasswordRequest,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_db_session),
-) -> None:
-    """Смена пароля (минимум 6 символов — базовая политика)."""
-    if len(data.new_password) < 6:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Пароль должен содержать не менее 6 символов",
-        )
-    auth = AuthService()
-    current_user.password_hash = auth.get_password_hash(data.new_password)
-    session.add(current_user)
-    await session.commit()
 
 
 # ─────────────────────── карточки уроков ───────────────────────
@@ -212,10 +201,12 @@ async def my_mock_exam_history(
     return [MockExamResponse.model_validate(e) for e in exams]
 
 
-# ─────────────────── загрузка файлов ДЗ (заглушка S3) ────────────────────
-# docs/02_tech_stack.md предусматривает S3/MinIO; до подключения объектного
-# хранилища файлы сохраняются локально и отдаются статикой /uploads/*.
-# Путь и ограничения задаются в config (upload_dir, max_upload_mb).
+# ─────────────────── файлы ДЗ: приватная загрузка и выдача ────────────────
+# docs/09 §4: файлы учеников приватны. Публичная статика /uploads из main.py
+# удалена; выдача идёт только через этот эндпоинт с проверкой прав
+# (владелец файла или администратор). До подключения S3/MinIO используется
+# локальное хранилище src/services/storage.py, интерфейс которого совместим
+# с presigned-схемой (ключ вместо URL).
 
 
 ALLOWED_EXTENSIONS = {
@@ -231,6 +222,8 @@ async def upload_file(
     """Сохранить файл решения и вернуть file_url для POST /homeworks/{id}/submit.
 
     Ограничения: размер ≤ settings.max_upload_mb, белый список расширений.
+    Файл сохраняется под UUID-именем в каталог владельца; путь формируется
+    только сервером (docs/09 §1 «Вредоносные файлы»).
     """
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -248,13 +241,38 @@ async def upload_file(
     if not content:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Пустой файл")
 
-    upload_root = Path(settings.upload_dir)
-    sub = upload_root / str(current_user.id)
-    sub.mkdir(parents=True, exist_ok=True)
+    key = storage.build_key(current_user.id, ext)
+    storage.storage.save(key, content)
 
-    safe_name = f"{uuid.uuid4().hex}{ext}"
-    (sub / safe_name).write_bytes(content)
+    logger.info("user %s uploaded %s (%d bytes)", current_user.id, key, len(content))
+    return {"file_url": f"/me/files/{key}", "size": len(content)}
 
-    url = f"/uploads/{current_user.id}/{safe_name}"
-    logger.info("user %s uploaded %s (%d bytes)", current_user.id, url, len(content))
-    return {"file_url": url, "size": len(content)}
+
+@router.get("/files/{owner_id}/{file_name}")
+async def get_private_file(
+    owner_id: int,
+    file_name: str,
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """Приватная выдача загруженного файла (замена публичного /uploads).
+
+    Доступ разрешён владельцу файла и преподавателю (admin); всем прочим —
+    404 без раскрытия факта существования файла.
+    """
+    from src.db.models import RoleEnum as _Role
+
+    if current_user.role != _Role.admin and current_user.id != owner_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл не найден")
+
+    key = f"{owner_id}/{file_name}"
+    try:
+        data = storage.storage.read(key)
+    except storage.FileStorageError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл не найден")
+
+    return Response(
+        content=data,
+        media_type=storage.storage.content_type(key),
+        headers={"Content-Disposition": f"inline; filename=\"{file_name}\"",
+                 "Cache-Control": "private, no-store"},
+    )

@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
@@ -10,62 +9,23 @@ from src.db.models import User
 from src.repositories import UserRepository
 
 
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-)
-
-
 class AuthService:
+    """Выдача и проверка токенов доступа.
+
+    Парольная аутентификация удалена из системы (docs/09 §2.4): вход — только
+    по одноразовым приглашениям и верифицированной initData Mini App. Методы
+    ниже работают с уже идентифицированным пользователем.
+    """
+
     def __init__(self):
         self.user_repo = UserRepository()
-
-    def get_password_hash(self, password: str) -> str:
-        """Хэширует пароль."""
-        return pwd_context.hash(password)
-
-    def verify_password(
-        self,
-        plain_password: str,
-        hashed_password: str,
-    ) -> bool:
-        """Сравнивает сырой пароль с хэшем из БД."""
-        return pwd_context.verify(
-            plain_password,
-            hashed_password,
-        )
-
-    async def authenticate_user(
-        self,
-        session: AsyncSession,
-        login: str,
-        password: str,
-    ) -> Optional[User]:
-        """
-        Проверяет логин и пароль.
-
-        Возвращает пользователя при успешной авторизации.
-        Возвращает None, если логин или пароль неверны.
-        """
-        user = await self.user_repo.get_by_login(
-            session,
-            login,
-        )
-
-        if not user:
-            return None
-
-        if not self.verify_password(
-            password,
-            user.password_hash,
-        ):
-            return None
-
-        return user
 
     def create_access_token(self, user: User) -> str:
         """
         Создаёт JWT access token для пользователя.
+
+        Используется server-side (Flet-приложение ходит в API от имени
+        вошедшего через initData пользователя). Клиентские секреты не выдаёт.
         """
         now = datetime.now(timezone.utc)
         expire = now + timedelta(
@@ -97,6 +57,14 @@ class AuthService:
             settings.jwt_secret_key.get_secret_value(),
             algorithms=[settings.jwt_algorithm],
         )
+
+    async def get_user_by_telegram_id(
+        self,
+        session: AsyncSession,
+        telegram_id: int,
+    ) -> Optional[User]:
+        """Пользователь по подтверждённому telegram_id (после verify_init_data)."""
+        return await self.user_repo.get_by_telegram_id(session, telegram_id)
 
     async def link_telegram_id(
         self,

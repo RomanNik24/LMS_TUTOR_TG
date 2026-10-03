@@ -25,16 +25,15 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
 
 
 def get_guest_keyboard() -> ReplyKeyboardMarkup:
-    """Клавиатура гостя: каталог + вход (docs/05, п.3 — «Мои услуги» для гостей)."""
+    """Клавиатура гостя (docs/05, п.3 — «Мои услуги» доступны до авторизации).
+
+    Кнопки входа нет: паролей в системе не существует (docs/09 §2.4),
+    доступ — только по одноразовому приглашению inv_<token>, которое
+    преподаватель отправляет ученику ссылкой.
+    """
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📚 Каталог курсов")],
-            [
-                KeyboardButton(
-                    text="🔑 Войти (/login)",
-                    web_app=None,
-                )
-            ],
         ],
         resize_keyboard=True,
     )

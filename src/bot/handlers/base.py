@@ -1,85 +1,94 @@
+"""Базовые команды бота (docs/05_bot_logic_and_fsm.md, docs/09 §2.4).
+
+Вход в систему — ТОЛЬКО по одноразовому приглашению ``/start inv_<token>``:
+преподаватель создаёт профиль ученика и отправляет ссылку
+``t.me/<bot>?start=inv_<token>``. Парольный FSM (/login → логин+пароль)
+удалён: ТЗ прямо запрещает пароли (docs/01, docs/09 §2.4).
+
+Токен проверяется src/services/invites.py: в БД лежит SHA-256, TTL 7 дней,
+использование однократное; повторный вход уже привязанного аккаунта — просто
+главное меню.
+"""
+
 from aiogram import Router
-from aiogram.types import Message, ReplyKeyboardRemove
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bot.states import LoginStates
-from src.bot.keyboards import get_guest_keyboard, get_main_keyboard
-from src.services.auth import AuthService
+from src.bot.keyboards import get_main_keyboard
 from src.repositories import UserRepository
+from src.services.invites import TOKEN_PREFIX, invite_service
 
 router = Router()
-auth_service = AuthService()
 
-@router.message(Command("start"))
-async def cmd_start(message: Message, session: AsyncSession):
-    user_repo = UserRepository()
+user_repo = UserRepository()
+
+
+@router.message(CommandStart())
+async def cmd_start(
+    message: Message,
+    session: AsyncSession,
+    command: CommandStart,
+):
+    """/start [payload]: payload вида inv_<token> гасит приглашение.
+
+    CommandStart() без параметров совпадает и с «/start», и с deep-link
+    «/start inv_...»; сам payload доступен в внедрённом объекте команды.
+    """
+    payload = (command.payload or "").strip() if command is not None else ""
+
+    # ── Вход по приглашению ────────────────────────────────────────────
+    if payload.startswith(TOKEN_PREFIX):
+        raw_token = payload[len(TOKEN_PREFIX):]
+        user, status = await invite_service.redeem(
+            session, raw_token, message.from_user.id
+        )
+        if status in ("ok", "already_linked") and user is not None:
+            await message.answer(
+                f"✅ Приглашение принято. Добро пожаловать, {user.login}!\n"
+                "Главное меню 👇",
+                reply_markup=get_main_keyboard(),
+            )
+            return
+        if status == "conflict":
+            await message.answer(
+                "❌ Этот Telegram-аккаунт уже привязан к другому профилю. "
+                "Обратитесь к преподавателю."
+            )
+            return
+        await message.answer(
+            "❌ Приглашение недействительно: оно уже использовано, "
+            "просрочено (срок — 7 дней) или отозвано. "
+            "Попросите преподавателя отправить новое."
+        )
+        return
+
+    # ── Обычный /start ─────────────────────────────────────────────────
     user = await user_repo.get_by_telegram_id(session, message.from_user.id)
-    
     if user:
         await message.answer(
             f"Привет, {user.login}! Добро пожаловать в главное меню.",
-            reply_markup=get_main_keyboard()
+            reply_markup=get_main_keyboard(),
         )
     else:
         await message.answer(
             "Добро пожаловать в MY_LMS!\n\n"
-            "Пожалуйста, авторизуйтесь с помощью команды /login или посмотрите список курсов (Каталог).",
-            reply_markup=get_guest_keyboard(),
+            "Аккаунт ещё не создан — попросите преподавателя прислать "
+            "приглашение (ссылка вида t.me/bot?start=inv_XXXX) и откройте "
+            "её в этом чате.\n\n"
+            "Ознакомиться с услугами можно в Каталоге 👇",
         )
 
-@router.message(Command("login"))
-async def cmd_login(message: Message, state: FSMContext, session: AsyncSession):
-    user_repo = UserRepository()
-    user = await user_repo.get_by_telegram_id(session, message.from_user.id)
-    if user:
-        await message.answer("Вы уже авторизованы в системе!")
-        return
 
-    await message.answer("Введите ваш логин:")
-    await state.set_state(LoginStates.wait_for_login)
-
-@router.message(LoginStates.wait_for_login)
-async def process_login(message: Message, state: FSMContext):
-    await state.update_data(login=message.text.strip())
-    await message.answer("Теперь введите ваш пароль:")
-    await state.set_state(LoginStates.wait_for_password)
-
-@router.message(LoginStates.wait_for_password)
-async def process_password(message: Message, state: FSMContext, session: AsyncSession):
-    password = message.text.strip()
-    data = await state.get_data()
-    login = data.get("login")
-    
-    user = await auth_service.authenticate_user(session, login, password)
-    if not user:
-        await message.answer("❌ Неверный логин или пароль. Попробуйте снова через команду /login.")
-        await state.clear()
-        return
-        
-    try:
-        await auth_service.link_telegram_id(session, user.id, message.from_user.id)
-        await session.commit()
-        await message.answer(
-            f"✅ Успешная авторизация!\nДобро пожаловать, {user.login}.",
-            reply_markup=get_main_keyboard()
-        )
-        await state.clear()
-    except ValueError as e:
-        await message.answer(f"❌ {e}")
-        await state.clear()
-
-@router.message(Command("logout"))
-async def cmd_logout(message: Message, session: AsyncSession):
-    user_repo = UserRepository()
-    user = await user_repo.get_by_telegram_id(session, message.from_user.id)
-    if user:
-        await user_repo.update(session, user.id, telegram_id=None)
-        await session.commit()
-        await message.answer(
-            "Вы успешно вышли из системы. Вы переведены в статус гостя.",
-            reply_markup=ReplyKeyboardRemove()
-        )
-    else:
-        await message.answer("Вы не авторизованы.")
+@router.message(Command("help"))
+async def cmd_help(message: Message):
+    await message.answer(
+        "Команды:\n"
+        "/start — главное меню (или вход по приглашению inv_...)\n"
+        "/schedule — расписание на неделю\n"
+        "/homeworks — статус домашних заданий\n"
+        "/app — открыть Mini App\n"
+        "/catalog — каталог курсов и услуг\n\n"
+        "Паролей в системе нет: вход выполняется преподавателем через "
+        "одноразовое приглашение."
+    )

@@ -9,7 +9,6 @@ from src.core.exceptions import ConflictError, NotFoundError, ValidationError
 from src.db.base import Base
 from src.db.models import HomeworkStatusEnum, LessonStatusEnum, RoleEnum
 from src.repositories import UserRepository
-from src.services.auth import AuthService
 from src.services.homework import HomeworkService
 from src.services.lesson import LessonService
 from src.services.mock_exam import MockExamService, convert_primary_score_to_grade
@@ -30,13 +29,11 @@ async def db_session():
 
 @pytest.fixture
 async def student(db_session):
-    auth = AuthService()
     repo = UserRepository()
     user = await repo.create(
         session=db_session,
         role=RoleEnum.student,
         login="pete",
-        password_hash=auth.get_password_hash("secret"),
         balance=3,
         lesson_price=1200,
     )

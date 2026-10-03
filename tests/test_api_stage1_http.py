@@ -11,7 +11,6 @@ import pytest
 from src.api.dependencies import get_current_user
 from src.db.models import RoleEnum, User
 from src.repositories import UserRepository
-from src.services.auth import AuthService
 
 
 @pytest.fixture
@@ -19,16 +18,14 @@ async def api_client(make_client):
     """Клиент + сид пользователей; возвращает (client, admin, student)."""
     client, session_maker = make_client
 
-    auth = AuthService()
     async with session_maker() as session:
         repo = UserRepository()
+        # Паролей в системе нет (docs/09 §2.4) — password_hash не заполняется.
         admin = await repo.create(
             session=session, role=RoleEnum.admin, login="admin",
-            password_hash=auth.get_password_hash("admin-pass"),
         )
         student = await repo.create(
             session=session, role=RoleEnum.student, login="pete",
-            password_hash=auth.get_password_hash("secret"),
             balance=2, lesson_price=1000,
         )
         await session.commit()
