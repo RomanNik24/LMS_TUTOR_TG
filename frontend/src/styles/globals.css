@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "./tokens.css";
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  html {
+    @apply scroll-smooth;
+  }
+}
+
+@layer utilities {
+  .container-narrow {
+    @apply max-w-[560px] mx-auto px-4 md:px-6 lg:px-8;
+  }
+  .container-wide {
+    @apply max-w-[1280px] mx-auto px-4 md:px-6 lg:px-8;
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply h-12 px-6 rounded-lg bg-primary text-primary-foreground font-heading font-extrabold text-sm uppercase tracking-wider
+         transition-colors hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+         disabled:opacity-45 disabled:pointer-events-none;
+  }
+  .btn-highlight {
+    @apply h-12 px-6 rounded-lg bg-highlight text-highlight-foreground font-heading font-extrabold text-sm uppercase tracking-wider
+         transition-colors hover:bg-amber-dark active:bg-amber-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+         disabled:opacity-45 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply h-12 px-6 rounded-lg bg-secondary text-secondary-foreground font-heading font-extrabold text-sm uppercase tracking-wider
+         transition-colors hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .btn-outline {
+    @apply h-12 px-6 rounded-lg border border-border bg-transparent font-heading font-extrabold text-sm uppercase tracking-wider
+         transition-colors hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .btn-ghost {
+    @apply h-12 px-4 rounded-lg font-heading font-medium text-sm
+         transition-colors hover:bg-muted active:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .btn-destructive {
+    @apply h-12 px-6 rounded-lg bg-destructive text-destructive-foreground font-heading font-extrabold text-sm uppercase tracking-wider
+         transition-colors hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+  .input-field {
+    @apply h-12 w-full px-4 rounded-lg border border-input bg-card text-foreground placeholder:text-muted-foreground
+         focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary
+         disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .card-base {
+    @apply rounded-lg border border-border bg-card p-4 shadow-card;
+  }
+  .hero-gradient {
+    background: var(--hero-gradient);
+  }
+}

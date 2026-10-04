@@ -1,0 +1,97 @@
+/* Design tokens from docs/07_design.md */
+
+:root {
+  /* Brand */
+  --brand-green: #1FAA59;
+  --brand-green-dark: #137A3E;
+  --brand-green-light: #6FE39C;
+  --brand-amber: #FF9B2E;
+  --brand-amber-dark: #E67E00;
+  --brand-black: #141414;
+  --brand-white: #FFFFFF;
+
+  /* Neutral */
+  --gray-900: #3A3A3A;
+  --gray-600: #5F5F5F;
+  --gray-500: #8A8A8A;
+  --gray-200: #E0E0E0;
+  --gray-100: #F2F2F2;
+
+  /* Semantic (shadcn) - light */
+  --background: #F2F2F2;
+  --foreground: #141414;
+  --card: #FFFFFF;
+  --card-foreground: #141414;
+  --popover: #FFFFFF;
+  --popover-foreground: #141414;
+  --primary: #137A3E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E4F5EB;
+  --secondary-foreground: #137A3E;
+  --muted: #F2F2F2;
+  --muted-foreground: #5F5F5F;
+  --accent: #E4F5EB;
+  --accent-foreground: #137A3E;
+  --destructive: #C93B3B;
+  --destructive-foreground: #FFFFFF;
+  --border: #E0E0E0;
+  --input: #E0E0E0;
+  --ring: #1FAA59;
+
+  /* Signal & accent */
+  --highlight: #FF9B2E;
+  --highlight-foreground: #141414;
+  --success-bg: #E4F5EB;
+  --success-fg: #137A3E;
+  --warning-bg: #FFEFDE;
+  --warning-fg: #141414;
+  --danger-bg: #FBE9E9;
+  --danger-fg: #A32A2A;
+
+  /* Hero */
+  --hero-gradient: linear-gradient(135deg, #1FAA59 0%, #137A3E 100%);
+  --hero-foreground: #FFFFFF;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.06), 0 4px 12px rgba(20, 20, 20, 0.06);
+  --shadow-overlay: 0 8px 24px rgba(20, 20, 20, 0.18);
+
+  /* Fonts */
+  --font-display: "Unbounded Variable", "Montserrat Variable", system-ui, sans-serif;
+  --font-heading: "Montserrat Variable", system-ui, sans-serif;
+  --font-body: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.dark {
+  --background: #141414;
+  --foreground: #F2F2F2;
+  --card: #1E1E1E;
+  --card-foreground: #F2F2F2;
+  --popover: #1E1E1E;
+  --popover-foreground: #F2F2F2;
+  --primary: #1FAA59;
+  --primary-foreground: #141414;
+  --secondary: #1F2E25;
+  --secondary-foreground: #6FE39C;
+  --muted: #262626;
+  --muted-foreground: #A6A6A6;
+  --accent: #1F2E25;
+  --accent-foreground: #6FE39C;
+  --destructive: #EF6B6B;
+  --destructive-foreground: #141414;
+  --border: #333333;
+  --input: #333333;
+  --ring: #6FE39C;
+  --success-bg: #1F2E25;
+  --success-fg: #6FE39C;
+  --warning-bg: #3A2A12;
+  --warning-fg: #FFD9A8;
+  --danger-bg: #3A1B1B;
+  --danger-fg: #F4A3A3;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
