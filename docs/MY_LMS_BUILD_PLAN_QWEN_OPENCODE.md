@@ -1,1883 +1,1168 @@
-# MY_LMS — детальный атомарный план построения проекта (MVP + Full)
+# MY_LMS («Ромчик | ИнфоМат») — план реализации: от скелета до MVP и полной версии
 
-> **Назначение:** рабочий master-plan для двух исполнителей: **QWEN-CODER** пишет и тестирует код; **OpenCode** выполняет Git/терминал/БД/Docker/окружения/деплой и проводит реальные эксплуатационные проверки.
-> **Архитектурная стратегия:** новый проект строится с нуля строго по `/docs`. Старый `LMS_TUTOR_TG` используется только как reference; его архитектура, модели и legacy-функции не переносятся автоматически.
+> **Репозиторий:** `RomanNik24/LMS_TUTOR_TG`
+> **Дата анализа:** 04.10.2026
+> **Версия плана:** 1.1: учтены ответы владельца на вопросы Q1–Q14 (раздел 3.1)
+> **Для кого файл:** два локальных агента и владелец проекта.
+> **Главное правило:** одна задача = одна ветка = один коммит = один PR. После merge агент **останавливается** и ждёт следующей команды.
 
-## 0. Правило атомарности
+---
 
-Каждая задача ниже — отдельный рабочий элемент. Для задачи, меняющей репозиторий, обязательны: отдельная ветка → один основной commit → PR → review → merge. После merge исполнитель останавливается. Следующую задачу нельзя начинать автоматически.
+## Содержание
 
-### Ответственность исполнителей
-| Исполнитель | Делает | Не делает |
+1. [Результаты анализа репозитория](#1-результаты-анализа-репозитория)
+2. [Исполнители и правила работы](#2-исполнители-и-правила-работы)
+3. [Вопросы и решения, нужные от владельца](#3-вопросы-и-решения-нужные-от-владельца)
+4. [Карта этапов и вех](#4-карта-этапов-и-вех)
+5. [MVP — Этап 0: оздоровление скелета](#этап-0--оздоровление-скелета-baseline)
+6. [MVP — Этап 1: ядро, БД, вход, тонкий срез, ранний staging](#этап-1--ядро-бд-вход-тонкий-срез-и-ранний-staging)
+7. [MVP — Этап 2: ученики, сотрудники, приглашения](#этап-2--ученики-сотрудники-приглашения)
+8. [MVP — Этап 3: расписание](#этап-3--расписание)
+9. [MVP — Этап 4: домашние задания и файлы](#этап-4--домашние-задания-и-файлы)
+10. [MVP — Этап 5: уведомления и фоновые задачи](#этап-5--уведомления-и-фоновые-задачи)
+11. [MVP — Этап 6: пробные экзамены и отчёты](#этап-6--пробные-экзамены-и-отчёты)
+12. [MVP — Этап 7: дашборд, статистика, финансы](#этап-7--дашборд-статистика-финансы)
+13. [MVP — Этап 8: каталог, бот, дизайн, полировка](#этап-8--каталог-бот-дизайн-полировка)
+14. [MVP — Этап 9: приёмка, бэкапы, мониторинг, запуск](#этап-9--приёмка-бэкапы-мониторинг-запуск-mvp)
+15. [Полная версия (после MVP)](#полная-версия-после-mvp)
+16. [Приложения: шаблоны промптов, формат отчёта, риски](#приложения)
+
+---
+
+# 1. Результаты анализа репозитория
+
+## 1.1. Как я анализировал
+
+- Страницы `github.com/.../tree/...` закрыты для автоматического доступа, поэтому репозиторий был **склонирован через `git clone`** и разобран локально.
+- Прочитаны все документы `docs/00`–`12`, а также `docs/QWEN.md` и `docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md`.
+- Код проверен запуском: `ruff`, `mypy --strict`, `python -c "import src.main"`.
+
+## 1.2. Важное расхождение: две версии репозитория
+
+| Источник | Что показывает |
+|---|---|
+| Страница GitHub, открытая через веб (вероятно, закэшированная) | 45 коммитов, `poetry.lock`, `alembic/`, `tests/`, `Dockerfile`, `seed.py`, `QWEN.md` в корне |
+| Реальный `git clone` (`main`) | **2 коммита от 04.10.2026**: `Initial commit` и `feat: initial project structure with backend and frontend scaffolding` |
+
+**Вывод:** старая («legacy») реализация, судя по всему, была удалена, и репозиторий пересоздан как **чистый скелет**. Этот план написан для актуального состояния (клон). Если старая версия где-то сохранилась, использовать её только как справочный материал, ничего не переносить автоматически (именно так и сказано в `docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md`).
+> ⚠ Владельцу нужно подтвердить это (вопрос Q1 в разделе 3).
+
+## 1.3. Что есть
+
+| Часть | Состояние |
+|---|---|
+| **Документация** `docs/00`–`12` (~380 КБ) | Очень сильная и подробная. Бизнес-логика, схема БД, API, права, безопасность, деплой, дизайн-система, гайд по фронтенду. `07_design.md` заполнен (v1.0) |
+| **Бэкенд** `src/` (~4,5 тыс. строк) | Каркас по слоям `api / bot / services / repositories / schemas / db / core / worker`. Модели всех таблиц из `04` описаны, сервисы и роутеры — наброски, много `TODO` |
+| **Фронтенд** `frontend/` (~60 файлов) | Vite + React + TS + Tailwind + shadcn: маршруты, страницы-заглушки, `api/client.ts`, `lib/telegram.ts`, `lib/datetime.ts` |
+| **Инфраструктура** | `docker-compose.yml` (postgres, redis, minio, app, worker, scheduler), `docker-compose.prod.yml`, конфиги nginx, `frontend/Dockerfile`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml` |
+
+## 1.4. Чего нет
+
+| Отсутствует | Почему важно |
+|---|---|
+| `tests/` — ни одного теста | `06_agent_rules` требует тесты на каждую бизнес-функцию |
+| Миграций нет (`src/db/migrations/`, `alembic.ini`) | Схема БД нигде не создаётся |
+| `uv.lock` и `frontend/pnpm-lock.yaml` | `Dockerfile` фронтенда копирует `pnpm-lock.yaml` — сборка упадёт; CI использует `--frozen` |
+| Backend `Dockerfile` | На него ссылаются все сервисы `docker-compose.yml` |
+| `.env.example` (бэкенд) и `frontend/.env.example` | README и правила агентов требуют их |
+| `scripts/` (`create_owner.py`, `backup.sh`) | Нужны для запуска и бэкапов |
+| Сиды (предметы, типы экзаменов, шкалы) | Конвертация баллов не будет работать |
+| `LICENSE` | README заявляет MIT |
+
+## 1.5. Что сломано (проверено запуском)
+
+| Находка | Деталь |
+|---|---|
+| Ruff | **333 замечания**: 14 `invalid-syntax`, 20 `undefined-name`, 58 неиспользуемых импортов, 70 `B008` и др. |
+| MyPy | Останавливается сразу: синтаксическая ошибка в `src/api/deps.py` (`from typing: Optional`) |
+| Импорт приложения | `import src.main` падает: `ExamType.config` объявлен как `Mapped[dict]` без JSONB-типа |
+| Бот | В хэндлере `/start` используется `message.conf` — такого атрибута в Aiogram нет; инвайт-логика — `TODO` |
+| Время | `datetime.now()` без UTC в 12 местах — нарушает правило «всё в UTC» (`03`, `06` A4) |
+| Контракты сервисов | 14 методов принимают `actor: User` вместо `CurrentUser` (`08`, раздел 9) |
+| `main.py` | `lifespan` — только комментарии: нет Redis, S3, Sentry, Aiogram, webhook/polling |
+| CI | Заканчивается на `mypy`: нет `pytest`, нет фронтенд-задачи, нет проверки миграций и дрейфа типов API |
+| Фронтенд | `(window as any)` в `lib/telegram.ts` нарушает запрет `any` (`06` B1) |
+| Зависимости фронтенда | Вероятные несовместимости: `@date-fns/tz` рассчитан на `date-fns` v4, а указан v2; `openapi-fetch` 0.10 обычно используется с `openapi-typescript` v7, а указан v6; `eslint.config.js` (flat config) при ESLint 8. Проверить при обновлении |
+| Конфигурация | README: `cp .env.example .env.local`; `compose` читает `.env.local`, а `config.py` читает `.env` |
+| Репозиторий | **Public**, а `09_security_and_privacy.md` требует приватный |
+
+## 1.6. Противоречия и устаревшее в документации (нужны решения до кода)
+
+| № | Противоречие | Предлагаемое решение |
 |---|---|---|
-| **QWEN-CODER** | Python/SQLAlchemy/Alembic/Pydantic/FastAPI/Aiogram/TaskIQ/React/TS/тесты/CI-конфиги/документацию | не правит production-БД вручную и не придумывает бизнес-правила |
-| **OpenCode** | shell, Git, Docker/Compose, PostgreSQL/Redis/MinIO/S3, реальные миграции, staging/prod, secrets, healthchecks, smoke/acceptance | не «чинит» бизнес-логику ручным SQL и не меняет код вместо QWEN без отдельной задачи |
-
-### Порядок взаимодействия
-- QWEN выполняет кодовую задачу и делает commit/PR.
-- OpenCode после merge запускает реальные проверки в соответствующем окружении; при необходимости выполняет только операционную часть.
-- Если OpenCode находит дефект кода, он не исправляет его в обход плана: создаётся новая bug-fix задача для QWEN.
-- Если задача требует изменения ТЗ, сначала фиксируется решение владельца и обновляется документация, затем код.
-
-## 1. Источники истины и обязательные ограничения
-
-- `docs/00_README_INDEX.md` — индекс; `01` — бизнес; `02` — стек; `03` — архитектура; `04` — БД; `05` — бот/FSM; `06` — правила агентов; `07` — дизайн/тон; `08` — API; `09` — security/privacy; `10` — deployment; `11` — roadmap; `12` — frontend.
-- При конфликте приоритет: `07 → 01 → 04 → 08 → остальные`. Не разрешать конфликт молча.
-- Стек фиксирован: Python 3.11 + uv + FastAPI + Aiogram 3 + SQLAlchemy async + PostgreSQL 16+ + Redis 7 + TaskIQ + S3; React + TypeScript strict + Vite + pnpm + React Router + TanStack Query + Tailwind + shadcn + Recharts.
-- Сессия: Redis + HttpOnly/Secure/SameSite=Lax cookie. Паролей нет. Browser JWT/Bearer не является целевым механизмом.
-- Роли: `owner`, `manager`, `student`; guest — только bot state. Финансы — только owner.
-- Нет платежей, баланса занятий, должников и Flet UI.
-- Время в DB/API — UTC/TIMESTAMPTZ; пользовательское отображение — в его IANA timezone.
-- Frontend не содержит бизнес-правила; сервер является источником истины.
-
-# MVP — этап M0: предпроектная фиксация
-
-### M0.01 — Составить ADR по конфликтам ТЗ
-**Исполнитель:** **QWEN-CODER**
-**Commit/Operation:** `docs: record approved specification decisions`
-Зафиксировать: тон bot (05 vs 07), `WEBHOOK_SECRET`/`WEBHOOK_PATH_SECRET`, cookie/fallback bearer из 03, порядок/источник шкал 2026.
-**DoD:** Есть явное решение владельца по каждому спорному пункту.
-
-### M0.02 — Создать новый GitHub repository и защитить main
-**Исполнитель:** **OPENCODE**
-**Commit/Operation:** `ops`
-Новый repo/remote, protected main, PR required, force-push запрещён.
-**DoD:** Работа идёт только через feature/fix branches.
-
-### M0.03 — Создать QWEN.md для clean-build режима
-**Исполнитель:** **QWEN-CODER**
-**Commit/Operation:** `docs: add project agent rules`
-Правила one-task-at-a-time, docs-first, роль QWEN/OpenCode, DoD, stop conditions.
-**DoD:** Документ согласован и лежит в root.
-
-### M0.04 — Настроить labels/milestones/issue conventions
-**Исполнитель:** **OPENCODE**
-**Commit/Operation:** `ops`
-Создать labels `mvp`, `full`, `backend`, `frontend`, `db`, `infra`, `security`, `bug`.
-**DoD:** Трекер позволяет однозначно связывать задачу с планом.
-
-### M0.05 — Проверить `/docs` и сформировать traceability matrix
-**Исполнитель:** **QWEN-CODER**
-**Commit/Operation:** `docs: add requirements traceability matrix`
-Для каждого обязательного требования указать docs section и будущий task ID.
-**DoD:** Ни одно MVP-требование не осталось без владельца.
-
-### M0.06 — Проверить официальные источники экзаменационных шкал 2026
-**Исполнитель:** **OPENCODE**
-**Commit/Operation:** `ops`
-Подготовить источник и зафиксировать материалы, которые QWEN затем занесёт в seed.
-**DoD:** Источники сохранены; seed не выполняется до этой проверки.
-
-# MVP — этап M1: Инструментальная база, core и целевая БД
-**Цель:** Получить чистый исполняемый backend foundation и целевую PostgreSQL schema.
-
-### M1.01 — Зафиксировать Python 3.11
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: standardize python 3.11`
-
-Обновить `pyproject`, Docker и tooling. Убрать расхождение между `^3.10` и Docker 3.12.
-
-### M1.02 — Зафиксировать uv как package manager
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: migrate dependency management to uv`
-
-Добавить lockfile и воспроизводимый install path.
-
-### M1.03 — Не добавлять password/JWT dependencies
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: remove password and jwt dependencies`
-
-Не добавлять `passlib`, `bcrypt`, `python-jose` и связанный код.
-
-### M1.04 — Подтвердить target runtime dependencies
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: add target backend dependencies`
-
-Добавить только необходимые целевому ТЗ пакеты: MyPy strict tooling, Ruff, TaskIQ stack, aioboto3, Pillow/pillow-heif, greenlet и прочее согласно `docs/02`.
-
-### M1.05 — Ввести целевую структуру `core`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: add core configuration primitives`
-
-Создать:
-- `core/config.py`
-- `core/enums.py`
-- `core/timeutils.py`
-- `core/security.py`
-- `core/logging.py`
-- `core/texts.py`
-
-Перенести только foundation-код, без массового business logic migration.
-
-### M1.06 — Перейти на конфигурацию из ТЗ
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: align environment configuration with specification`
-
-Перейти к `APP_ENV`, `DATABASE_URL`, `BOT_MODE`, `WEBHOOK_URL`, `WEBHOOK_SECRET`, `OWNER_TELEGRAM_ID`, `TEACHER_CONTACT_URL`, `PUBLIC_BASE_URL`, `SESSION_SECRET`, `S3_*`, `SENTRY_DSN`, `DEFAULT_TIMEZONE`, `BOT_USERNAME`, `SCHEDULE_HORIZON_WEEKS` и т.д.
-
-### M1.07 — Ввести единый набор исключений
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: introduce domain exception hierarchy`
-
-Добавить `PermissionDeniedError`, `NotFoundError`, `BusinessRuleError`, `ExternalServiceError` и целевые бизнес-ошибки по API spec.
-
-### M1.08 — Ввести единый API error envelope
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add api error envelope`
-
-Формат:
-`{"error":{"code":"...","message":"...","details":{...}}}`
-
-Добавить обработчики 400/401/403/404/409/413/415/422/429/500 и request-id.
-
-### M1.09 — Ввести base DTO/schema слой
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: add role-specific api schemas`
-
-Начать разделение response models по роли и use case. Не использовать одну универсальную модель пользователя для всех ролей.
-
-### M1.10 — Перестроить ORM base/types
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: align orm primitives with postgres target`
-
-Целевые принципы:
-- BIGINT IDENTITY;
-- `TIMESTAMPTZ`;
-- JSONB где указано;
-- единая enum policy;
-- `updated_at` по требованиям;
-- PostgreSQL-specific types/constraints.
-
-### M1.11 — Создать целевые domain models
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add target domain models`
-
-Покрыть таблицы из `docs/04`:
-- references;
-- users/student profiles/guardians/tokens;
-- schedule/templates/participants;
-- homeworks/materials/assignments/extensions/files;
-- mock exam results;
-- notifications/audit log.
-
-### M1.12 — Пересоздать clean initial migration
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: replace legacy schema with target initial migration`
-
-Если владелец подтвердил отсутствие требуемых production-данных, сделать одну чистую initial migration. Иначе этот commit не выполнять без отдельного migration strategy.
-
-### M1.13 — Добавить PostgreSQL extensions/constraints baseline
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add postgres extensions and baseline constraints`
-
-В том числе `btree_gist` и необходимые FK/unique/check constraints.
-
-### M1.14 — Перенести репозитории на constructor-injected session
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: standardize repository session ownership`
-
-Repository принимает session через constructor/context и никогда не делает `commit`.
-
-### M1.15 — Перенести commit boundary в services
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: enforce service transaction boundaries`
-
-Одна business operation = одна транзакция service. Middleware/routers/repositories не коммитят.
-
-### M1.16 — Ввести `actor` в service contracts
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: add actor-aware service contracts`
-
-Все операции, которые меняют данные или читают защищённые ресурсы, принимают actor/context и проверяют права на уровне service.
-
-### M1.17 — Ввести `Notifier` interface
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add notifier abstraction`
-
-Сервисы не импортируют aiogram. Пока можно иметь stub implementation.
-
-### M1.18 — Создать `/api/v1` skeleton
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add versioned api skeleton`
-
-Сформировать `/api/v1/auth`, `/reference`, `/student`, `/admin`, `/files` и `/health` без полной бизнес-реализации.
-
-### M1.19 — Включить Ruff + MyPy strict + pre-commit
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: enforce backend quality tooling`
-
-Сделать конфигурацию воспроизводимой и обязательной в CI.
-
-# MVP — этап M2: Users, RBAC, Telegram Auth, invitations, privacy
-**Цель:** Закрыть identity/security до добавления сложных бизнес-доменов.
-
-### M2.01 — Реализовать enum ролей `owner/manager/student`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: replace legacy roles with target roles`
-
-Удалить `admin` из domain API.
-
-### M2.02 — Реализовать owner bootstrap
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: bootstrap first owner from telegram id`
-
-Использовать `OWNER_TELEGRAM_ID`; сделать idempotent bootstrap script без ручного создания admin.
-
-### M2.03 — Реализовать `student_profiles`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student profile domain`
-
-Вынести student-specific fields из `users`, добавить timezone/status/archive attributes согласно ТЗ.
-
-### M2.04 — Реализовать archive/restore
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add user archive and restore`
-
-Архивированный пользователь не может аутентифицироваться и не должен получать active access.
-
-### M2.05 — Реализовать Redis session store
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add server-side redis sessions`
-
-Session ID хранится в `HttpOnly` cookie. Redis — source of truth.
-
-### M2.06 — Подключить session auth dependency
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: authenticate api via server sessions`
-
-Удалить использование Bearer JWT как primary browser auth.
-
-### M2.07 — Добавить session revocation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: revoke user sessions on identity changes`
-
-Вызывать `revoke_all_for_user` минимум при:
-- archive;
-- role change;
-- Telegram ID relink/change.
-
-### M2.08 — Реализовать `POST /auth/telegram`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add telegram web auth endpoint`
-
-Server-side validation initData + user resolution + session creation.
-
-### M2.09 — Реализовать `POST /auth/link`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add browser link authentication`
-
-Token-based invite login according to API spec.
-
-### M2.10 — Реализовать invitation issuance
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student invitation issuance`
-
-Endpoint/service for owner/manager; expiration; `web_login` purpose; creator audit.
-
-### M2.11 — Исправить invite URL
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `fix: build canonical telegram invite url`
-
-Использовать конфигурируемый bot username и `https://t.me/<bot>?start=...`.
-
-### M2.12 — Реализовать invitation revoke/list
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: manage student invitations`
-
-`GET/POST/DELETE` согласно `/api/v1` contract.
-
-### M2.13 — Реализовать `ConfirmRelinkState`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add telegram relink confirmation flow`
-
-Никакой тихой перезаписи чужого Telegram ID.
-
-### M2.14 — Добавить audit events для auth/link/archive
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: audit identity and access changes`
-
-Хранить в PostgreSQL `audit_log`.
-
-### M2.15 — Role-aware 404 policy
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `fix: hide protected student existence from unauthorized roles`
-
-Для чужих student resources возвращать 404, когда это требует ТЗ, а не 403.
-
-### M2.16 — Разделить DTO по ролям
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: enforce role-specific user responses`
-
-Student schemas не должны содержать finance/private staff-only fields.
-
-### M2.17 — Удалить balance/lesson_price из student-facing auth models
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: remove financial fields from student api`
-
-Это только удаление из public/student contracts; полный removal domain-функционала будет отдельной задачей в этапе 6.
-
-### M2.18 — CSRF enforcement
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: enforce csrf origin protection`
-
-Для mutating browser requests:
-- обязательный корректный `Origin`;
-- требование `X-Requested-With` согласно ТЗ;
-- fail closed.
-
-### M2.19 — Rate limits по доменному ключу
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement target rate limits`
-
-Отдельно проверить:
-- auth 10/min/IP;
-- invite attempts 5/10m per telegram_id;
-- files 30/10m user;
-- REST 120/min user.
-
-### M2.20 — Безопасные response headers и production OpenAPI policy
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: harden http security headers`
-
-HSTS/CSP/frame-ancestors и закрытие `/openapi.json` в production.
-
-### M2.21 — Auth/privacy integration suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover roles sessions relink archive and privacy`
-
-Обязательные negative cases для owner/manager/student.
-
-# MVP — этап M3: Расписание, групповые уроки, шаблоны и attendance
-**Цель:** Реализовать расписание без гонок и с корректной временем/ценами.
-
-### M3.01 — Reference subjects/exam basics
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add subject reference api`
-
-CRUD/read endpoints согласно `/reference`.
-
-### M3.02 — Schedule templates domain
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add schedule template domain`
-
-Создание/редактирование/participants для recurring schedule.
-
-### M3.03 — Lesson participant model
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add group lesson participants`
-
-`lesson_participants` с attendance, billable, price_snapshot.
-
-### M3.04 — Lesson create service
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: create lessons through schedule service`
-
-Урок больше не создаётся напрямую из router/repository.
-
-### M3.05 — Teacher overlap database constraint
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: prevent teacher lesson overlap in postgres`
-
-Использовать exclusion constraint с `tstzrange` + `btree_gist`.
-
-### M3.06 — Lesson uniqueness for generated template occurrences
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add template occurrence uniqueness`
-
-UNIQUE `(template_id, start_at)` и идемпотентная генерация.
-
-### M3.07 — Lesson lifecycle
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement lesson lifecycle`
-
-`schedule/completed/cancelled` + completed/cancelled metadata.
-
-### M3.08 — Attendance and billable flags
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: record attendance and billable state`
-
-Для каждого участника отдельно.
-
-### M3.09 — Price snapshot
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: snapshot participant lesson price`
-
-При фиксации billable state сохранять цену в `lesson_participants.price_snapshot`. Не считать прошлый earning по текущей цене профиля.
-
-### M3.10 — Reschedule operation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement lesson reschedule`
-
-Проверка конфликтов + audit + будущая интеграция с notification/outbox.
-
-### M3.11 — Cancel operation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement lesson cancellation`
-
-Причина/metadata по ТЗ, без физического удаления.
-
-### M3.12 — Detach overrides
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: support detached lesson overrides`
-
-Изменённое occurrence не должно повторно затираться генератором template.
-
-### M3.13 — Generate future lessons
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: generate lessons from templates`
-
-Горизонт `SCHEDULE_HORIZON_WEEKS`, idempotency.
-
-### M3.14 — Timezone-aware scheduling
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: calculate schedule in user timezone`
-
-Стандарт хранения UTC-aware; отображение и day boundaries в timezone пользователя.
-
-### M3.15 — DST regression suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover schedule timezone and dst transitions`
-
-Проверить переходы DST и границы локального дня.
-
-### M3.16 — Student `/today`
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student today endpoint`
-
-Только student-visible data, без finance.
-
-### M3.17 — Admin schedule endpoints
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin schedule api`
-
-CRUD templates/lessons/participants/reschedule/cancel/complete.
-
-### M3.18 — Schedule audit tests
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover group lessons conflicts and price snapshots`
-
-Race/negative tests, teacher overlap, group participants, detached occurrence.
-
-# MVP — этап M4: Домашние задания, S3 и файловый сервис
-**Цель:** Реализовать полный lifecycle ДЗ и приватные файлы.
-
-### M4.01 — Homework domain
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework domain`
-
-`homeworks`, `homework_materials` и поля `kind`, `exam_type_id`, `max_score`, due mode и т.п.
-
-### M4.02 — Homework assignments
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework assignments`
-
-Отдельная выдача для каждого assignee.
-
-### M4.03 — Assignment statuses
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement homework assignment state machine`
-
-`assigned/submitted/needs_revision/graded/expired`.
-
-### M4.04 — Group assignment
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: assign homework to groups`
-
-Один homework может быть выдан нескольким студентам с отдельным состоянием каждого.
-
-### M4.05 — Submission metadata
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework submission fields`
-
-`submission_type`, `submitted_at`, comments, score/graded metadata и post-expiry grading data.
-
-### M4.06 — Extension domain
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework deadline extensions`
-
-Журнал расширений + максимум 2.
-
-### M4.07 — Extend deadline service
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: enforce homework extension limit`
-
-Код ошибки `homework_extension_limit`.
-
-### M4.08 — Expiry service
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: expire overdue homework assignments`
-
-Перевод в `expired` по дедлайну.
-
-### M4.09 — Submission service
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: submit homework assignment`
-
-Проверка состояния и правил просрочки согласно ТЗ.
-
-### M4.10 — Return for revision
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: return homework for revision`
-
-`needs_revision` + feedback.
-
-### M4.11 — Grade homework
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: grade homework assignments`
-
-Числовая оценка с validation range, `graded_by`, `graded_at`, комментариями.
-
-### M4.12 — Teacher materials/files model
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework materials and files`
-
-Не смешивать файл teacher material и student submission.
-
-### M4.13 — S3 storage abstraction
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add private s3 file storage`
-
-aioboto3; private bucket; object key abstraction.
-
-### M4.14 — Local MinIO development storage
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: add minio development environment`
-
-Только для local/integration use.
-
-### M4.15 — MIME/content validation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: validate uploaded file type and content`
-
-Разрешённые типы: jpg/png/heic/pdf; проверка MIME + extension + decoded content.
-
-### M4.16 — File size/count limits
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: enforce homework file limits`
-
-≤10 MB на файл, ≤10 файлов на assignment.
-
-### M4.17 — HEIC processing
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: convert heic uploads to jpeg`
-
-Pillow + pillow-heif, с корректной обработкой ориентации/метаданных.
-
-### M4.18 — Presigned URL endpoint
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add presigned file urls`
-
-`/api/v1/files/{file_id}/url`, авторизация на каждую ссылку.
-
-### M4.19 — Student homework API
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student homework api`
-
-Списки/детали/submit/extend согласно spec; без staff-only данных.
-
-### M4.20 — Admin homework API
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin homework api`
-
-CRUD, assignments, materials, grading, return, extension, review queue.
-
-### M4.21 — Homework negative-case suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover homework lifecycle and file constraints`
-
-Проверить expiry, two extensions, over-limit files, invalid MIME, score range, role access.
-
-# MVP — этап M5: Outbox, TaskIQ, scheduler и уведомления
-**Цель:** Сделать уведомления durable, идемпотентными и управляемыми через outbox.
-
-### M5.01 — Перейти с Arq на TaskIQ
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: migrate worker runtime to taskiq`
-
-Удалить Arq после переноса минимального worker runtime.
-
-### M5.02 — TaskIQ Redis broker
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: configure taskiq redis broker`
-
-### M5.03 — Scheduler process
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add taskiq scheduler`
-
-Выделенный scheduler как процесс/контейнер.
-
-### M5.04 — Notification entity/outbox repository
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add notification outbox repository`
-
-Поля включая type, payload, recipient, dedup key, status, retry metadata.
-
-### M5.05 — Notification service
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add notification service`
-
-Services создают outbox event, но не отправляют Telegram напрямую.
-
-### M5.06 — Dispatcher with locking/dedup
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: dispatch notification outbox`
-
-Надёжная дедупликация на БД, а не только Redis TTL.
-
-### M5.07 — Retry policy
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add notification retry policy`
-
-Повторы по ТЗ, статусы `sent/failed/skipped`.
-
-### M5.08 — TelegramNotifier
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement telegram notifier`
-
-Единый reusable Bot client/session strategy, без создания нового Bot per recipient.
-
-### M5.09 — bot blocked handling
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: handle telegram bot blocked recipients`
-
-Фиксировать `bot_blocked`/skipped state и не зацикливать retries.
-
-### M5.10 — Quiet hours and timezone
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: enforce notification quiet hours`
-
-Тихие часы 22:00–08:00 в локальном timezone пользователя, с правилами для urgent notifications.
-
-### M5.11 — Lesson reminder exactly 30 minutes
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: send exact lesson reminders`
-
-Проверка должна выполняться с минутной гранулярностью и отправлять reminder для `start_at` примерно ровно `now+30m`, с idempotent dedup.
-
-### M5.12 — Homework deadline reminder 24h
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: send homework deadline reminders`
-
-Не daily global reminder, а per-deadline 24h window.
-
-### M5.13 — New homework notifications
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify students about new homework`
-
-### M5.14 — Homework graded/revision notifications
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify students about homework review result`
-
-### M5.15 — Lesson cancel/reschedule notifications
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify lesson schedule changes`
-
-### M5.16 — Staff homework submitted/expired notifications
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify staff about homework events`
-
-### M5.17 — Student joined notification
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify staff about student telegram link`
-
-### M5.18 — Morning digest
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add staff morning digest`
-
-08:00 local/targeted timezone policy, состав согласно ТЗ.
-
-### M5.19 — Generate scheduled lessons job
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: schedule recurring lesson generation`
-
-Использовать service, не дублировать business logic в task.
-
-### M5.20 — Expire assignments job
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: schedule homework expiry job`
-
-### M5.21 — Notify unmarked lessons job
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: notify about unmarked lessons`
-
-### M5.22 — Cleanup tokens job
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: cleanup expired auth tokens`
-
-### M5.23 — Heartbeat job
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add worker heartbeat`
-
-### M5.24 — Scheduler/worker integration suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover outbox retries quiet hours and scheduler jobs`
-
-Проверить idempotency, retry windows, timezone, blocked bot, duplicate events.
-
-# MVP — этап M6: Пробники, отчёты, dashboard и финансы
-**Цель:** Реализовать правильные экзамены и owner-only аналитику без balance/debtors.
-
-### M6.01 — Exam types reference
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add exam type references`
-
-4 типа экзаменов по ТЗ.
-
-### M6.02 — Grade scale model
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add database driven grade scales`
-
-Шкалы только в БД; код не содержит hardcoded threshold table.
-
-### M6.03 — Populate verified grade scales
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `data: add verified exam grade scales`
-
-Перед commit сверить текущие данные с официальным источником, который назначен владельцем/ТЗ. Не вносить «предположительные» цифры.
-
-### M6.04 — OGE geometry rule
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement oge geometry scoring rule`
-
-Только если это прямо требуется `docs/04`.
-
-### M6.05 — `max_primary` handling
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: handle exam maximum score rules`
-
-Нестандартный максимум не конвертировать по неподходящей шкале.
-
-### M6.06 — Exam result creation/update
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement mock exam result domain`
-
-`mock_exam_results` и связь с assignment/result lifecycle.
-
-### M6.07 — Auto-create exam result from mock-exam homework
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: create exam result from graded mock homework`
-
-Запрещать ручное переопределение calculated grade, кроме предусмотренного ТЗ механизма.
-
-### M6.08 — Exam endpoints
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add mock exam api`
-
-CRUD/read/update/delete according to `/api/v1`.
-
-### M6.09 — Student reports domain
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement student reports`
-
-Недавний прогресс, weekly percent, on-time percentage, mock exam dynamics.
-
-### M6.10 — Report aggregation queries
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `perf: optimize report aggregations`
-
-Избегать N+1 и ручного парсинга score strings.
-
-### M6.11 — Dashboard foundation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin dashboard metrics`
-
-Локальное «сегодня», queue/review/deadline/unmarked/earnings metrics.
-
-### M6.12 — Review queue and unmarked lessons widgets
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add dashboard operational queues`
-
-Очередь проверки; прошедшие уроки без отметки.
-
-### M6.13 — Upcoming deadlines 24h
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add dashboard upcoming deadlines`
-
-Использовать реальные assignment due_at и timezone rules.
-
-### M6.14 — Finance expected/earned queries
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: calculate owner finance from billable snapshots`
-
-Формулы используют `price_snapshot`, а не current student price.
-
-### M6.15 — Finance breakdowns
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add finance breakdowns and cancellation stats`
-
-Owner-only view; earning/expected/cancellations according to spec.
-
-### M6.16 — Finance CSV export
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add owner finance csv export`
-
-Проверка доступа owner-only.
-
-### M6.17 — Remove balance model fields
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: remove legacy balance fields`
-
-Удалить из ORM/service/API/UI остатки `balance`, `debtors_flag`, `lesson_price` там, где они больше не нужны.
-
-### M6.18 — Remove balance services/routes/tests
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: remove legacy balance domain`
-
-Удалить `atomic_adjust_balance`, `add_balance`, `InsufficientBalanceError`, `/balance`, debtor dashboard paths и race tests.
-
-### M6.19 — Remove balance-related bot texts/tasks
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: remove legacy balance messaging`
-
-Убрать формулировки «спишется занятие», «баланс», «должник».
-
-### M6.20 — Owner-only finance security suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: enforce finance owner-only access`
-
-Owner success; manager/student negative cases; DTO/schema privacy checks.
-
-### M6.21 — Exam/dashboard/report regression suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover exams reports dashboard and finance`
-
-Включая grading thresholds, score ranges, timezone day boundaries, price snapshot calculations.
-
-# MVP — этап M7: Telegram bot, меню, каталог и deep links
-**Цель:** Сделать bot тонким транспортом и точкой входа.
-
-### M7.01 — Bot client abstraction
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add telegram bot client abstraction`
-
-Единая точка конфигурации API/proxy/webhook.
-
-### M7.02 — AuthMiddleware
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add bot auth middleware`
-
-Состояния guest/student/staff; единый user context.
-
-### M7.03 — Role-aware command menus
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add role specific telegram menus`
-
-Разные команды и кнопки для guest/student/staff.
-
-### M7.04 — `setMyCommands` scopes
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: register telegram commands by chat scope`
-
-Использовать BotCommandScopeChat где требует ТЗ.
-
-### M7.05 — Guest `/start` flow
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement guest start flow`
-
-Каталог + teacher contact + invite entry points.
-
-### M7.06 — Student bot commands
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement student bot commands`
-
-`/today`, `/hw`, `/app`, `/web`, `/help`, `/logout`, `/start` relink behavior согласно ТЗ.
-
-### M7.07 — Staff bot commands
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: implement staff bot commands`
-
-Staff должен получать staff-меню, а не student-меню.
-
-### M7.08 — `/app` deep link
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `fix: make app command open correct web app`
-
-Не отправлять повторно главное меню.
-
-### M7.09 — `/web` login
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add web login command`
-
-Генерация/выдача browser login link согласно auth flow.
-
-### M7.10 — Homework deep links
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add homework deep links`
-
-Переход на конкретное ДЗ/assignment.
-
-### M7.11 — Confirm relink FSM
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: connect telegram relink confirmation to bot`
-
-Сервис + FSM + audit + session revocation.
-
-### M7.12 — Catalog from database
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: load catalog from database`
-
-Убрать статический `bot/catalog.py`.
-
-### M7.13 — Catalog pagination callbacks
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add catalog inline pagination`
-
-`◀ Назад / Далее ▶` через message edit + `callback.answer()`.
-
-### M7.14 — Centralize bot texts
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: move bot texts to texts module`
-
-Брендинг и тон из `docs/07`.
-
-### M7.15 — Bot error handler and fallback
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add global bot error handling`
-
-Global error handler; `callback.answer()`; fallback на сообщения вне сценария.
-
-### M7.16 — `my_chat_member` and allowed updates
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: handle telegram chat membership updates`
-
-Изменять `bot_blocked` состояние через bot events.
-
-### M7.17 — Combine API + bot runtime model
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `refactor: run api and bot in target application process`
-
-Подготовить lifecycle/webhook model, не делая ещё production deployment.
-
-### M7.18 — Webhook endpoint
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add telegram webhook endpoint`
-
-`/telegram/webhook/{secret}` согласно спецификации.
-
-### M7.19 — Bot integration tests
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: cover telegram role menus auth and relink`
-
-# MVP — этап M8: React frontend и сквозная интеграция
-**Цель:** реализовать Student/Admin UI после готовых backend contracts, затем пройти MVP acceptance.
-
-### M8.01 — React/Vite TypeScript scaffold
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: scaffold frontend application`
-
-Использовать стек из docs: React + TS + Vite + React Router + TanStack Query + Tailwind + shadcn + Recharts.
-
-### M8.02 — Strict TypeScript/tooling
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `chore: enforce strict frontend tooling`
-
-No `any`, no `@ts-ignore`.
-
-### M8.03 — Generated API types
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: generate frontend api types from openapi`
-
-Добавить codegen path и drift check.
-
-### M8.04 — Frontend API/query layer
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add typed api client and query layer`
-
-TanStack Query; business logic не в UI components.
-
-### M8.05 — Design tokens and UI primitives
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add design system primitives`
-
-Перенести `docs/07`: tokens, `StatusBadge`, buttons, cards, forms, alerts.
-
-### M8.06 — Student app shell
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student app shell`
-
-Навигация и responsive layout.
-
-### M8.07 — Student schedule screen
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student schedule screen`
-
-Today/upcoming, local time formatting.
-
-### M8.08 — Student homework screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student homework screens`
-
-List/detail/upload/status/revision.
-
-### M8.09 — Student reports screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student reports screens`
-
-Recharts; без неверного предположения шкалы 1–5.
-
-### M8.10 — Student profile/auth screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add student profile and auth screens`
-
-`/login/:token`, session state, logout.
-
-### M8.11 — Admin app shell
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin application shell`
-
-Side navigation and role gating.
-
-### M8.12 — Admin students/staff screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin people screens`
-
-Students, staff, invitations, archive/restore.
-
-### M8.13 — Admin schedule screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin schedule screens`
-
-Templates/lessons/participants/reschedule/cancel/complete.
-
-### M8.14 — Admin homework/review screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin homework screens`
-
-Creation, assignments, review queue, grade, revision, extensions.
-
-### M8.15 — Admin mock exam screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin mock exam screens`
-
-DB-driven result UX.
-
-### M8.16 — Admin dashboard
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add admin dashboard`
-
-Queues, deadlines, unmarked lessons, earnings/expected.
-
-### M8.17 — Catalog management
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add catalog management screens`
-
-CRUD and ordering/pagination.
-
-### M8.18 — Owner finance screens
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add owner finance screens`
-
-Finance absent for manager/student navigation and payloads.
-
-### M8.19 — Loading/error/empty/toast states
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: standardize frontend state feedback`
-
-Все перечисленные states из design/frontend guide.
-
-### M8.20 — Telegram Mini App integration
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: integrate telegram mini app context`
-
-BackButton, theme, safe area, initData handoff.
-
-### M8.21 — Frontend unit/component tests
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: add frontend component coverage`
-
-Vitest + Testing Library + MSW.
-
-### M8.22 — Playwright E2E baseline
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: add frontend end to end coverage`
-
-Минимум: login, student schedule, homework submit, owner finance access, forbidden finance for student/manager.
-
-### M8.23 — OpenAPI contract verification
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: verify openapi contract and operation ids`
-
-Пути, operation IDs, response models, error codes.
-
-### M8.24 — Security regression suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: add end to end security regression suite`
-
-Проверить:
-- initData;
-- session revocation;
-- archive;
-- RBAC;
-- 404 masking;
-- CSRF;
-- rate limits;
-- file limits;
-- private S3 URLs;
-- no finance in student API.
-
-### M8.25 — Full MVP acceptance suite
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `test: add full mvp acceptance suite`
-
-Сверить с Definition of Done и критериями MVP из roadmap.
-
-## M1. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM1.01 — Поднять чистую local toolchain
-**Исполнитель:** **OPENCODE**
-Python 3.11, uv, Node/pnpm, Docker/Compose; проверить версии.
-**Зависит от:** После M1.01
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM1.02 — Проверить install из нуля
-**Исполнитель:** **OPENCODE**
-`uv sync --frozen`; `pnpm install --frozen-lockfile` после появления frontend.
-**Зависит от:** После соответствующих lockfiles
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM1.03 — Поднять PostgreSQL 16/Redis 7 local
-**Исполнитель:** **OPENCODE**
-Проверить подключения из контейнеров и суть сети без внешних портов.
-**Зависит от:** После M1.10
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M2. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM2.01 — Smoke-test FastAPI + lifespan
-**Исполнитель:** **OPENCODE**
-Запустить app, `/health`, shutdown/restart.
-**Зависит от:** После M2.18
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM2.02 — Проверить Redis session/FSM prerequisites
-**Исполнитель:** **OPENCODE**
-Redis persistence/TTL и connectivity.
-**Зависит от:** После M2.05
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M3. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM3.01 — Создать чистую PostgreSQL 16 database
-**Исполнитель:** **OPENCODE**
-Только через Docker/Compose; без ручного изменения схемы.
-**Зависит от:** После M3.12
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM3.02 — Применить `alembic upgrade head`
-**Исполнитель:** **OPENCODE**
-На пустой БД, затем `downgrade` и повторный `upgrade`.
-**Зависит от:** После M3.12
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM3.03 — Проверить constraints/indexes
-**Исполнитель:** **OPENCODE**
-EXCLUDE/UNIQUE/CHECK — через реальный PG.
-**Зависит от:** После M3.13
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M4. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM4.01 — Проверить real Redis session flow
-**Исполнитель:** **OPENCODE**
-Login → cookie → request → logout → revoke.
-**Зависит от:** После M4.21
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM4.02 — Проверить Redis failure behavior
-**Исполнитель:** **OPENCODE**
-Убедиться, что rate-limit/auth деградируют только по описанному контракту.
-**Зависит от:** После M4.21
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M5. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM5.01 — Сгенерировать OpenAPI и TS types
-**Исполнитель:** **OPENCODE**
-Запустить backend export + `pnpm gen:api`; сравнить diff.
-**Зависит от:** После M5.04
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM5.02 — Проверить CI contract drift
-**Исполнитель:** **OPENCODE**
-Запустить pipeline locally/CI и убедиться, что изменение schema.d.ts ловится.
-**Зависит от:** После M5.07
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M6. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM6.01 — Выполнить owner bootstrap на clean DB
-**Исполнитель:** **OPENCODE**
-Передать `OWNER_TELEGRAM_ID` только через environment.
-**Зависит от:** После M6.02
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM6.02 — Провести invitation smoke test
-**Исполнитель:** **OPENCODE**
-Create invite → accept → relink conflict → confirm → revoke/session revoke.
-**Зависит от:** После M6.10
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M7. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM7.01 — Запустить schedule migration на реальном PG
-**Исполнитель:** **OPENCODE**
-Проверить teacher overlap и concurrent insert.
-**Зависит от:** После M7.04
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM7.02 — Проверить генерацию horizon
-**Исполнитель:** **OPENCODE**
-Несколько недель, повторный запуск без дублей, DST case.
-**Зависит от:** После M7.18
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-## M8. OpenCode — эксплуатационные проверки после кодовых задач
-
-### OM8.01 — Поднять frontend dev server и backend proxy
-**Исполнитель:** **OPENCODE**
-Проверить login/navigation on localhost.
-**Зависит от:** После M8.04
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM8.02 — Проверить Student/Admin screens
-**Исполнитель:** **OPENCODE**
-Chrome mobile widths + desktop 1280.
-**Зависит от:** После M8.22
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM8.03 — Провести real-device Telegram test
-**Исполнитель:** **OPENCODE**
-iOS + Android: Mini App, cookie, BackButton, theme, safe area.
-**Зависит от:** После M8.25
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-### OM8.04 — Провести MVP staging rehearsal
-**Исполнитель:** **OPENCODE**
-Чистый стенд, миграции, seed, full scenario without manual SQL.
-**Зависит от:** После M8.25
-**DoD:** результат команды/стенда зафиксирован в PR comment/issue; код не исправляется вручную в обход QWEN.
-
-# FULL PROJECT — Stage 8 / Production и эксплуатация
-
-### F1.01 — Nginx same-domain deployment
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add nginx frontend api routing`
-
-React SPA + `/api/v1` + Telegram webhook on one domain.
-
-### F1.02 — Production compose
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add production docker compose`
-
-Target services:
-- app;
-- worker;
-- scheduler;
-- postgres;
-- redis;
-- nginx.
-
-Не публиковать внутренние service ports наружу.
-
-### F1.03 — Healthchecks and graceful lifecycle
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `feat: add service healthchecks and graceful shutdown`
-
-API, worker/scheduler readiness and proper lifecycle.
-
-### F1.04 — Backup/restore tooling
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `ops: add postgres backup and restore scripts`
-
-Документировать проверку восстановления.
-
-### F1.05 — JSON logs and Sentry without PII
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `ops: add structured logging and sentry`
-
-Без secrets и персональных данных в логах.
-
-### F1.06 — CI frontend/backend pipeline
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `ci: add full backend frontend verification pipeline`
-
-Пайплайн:
-1. install;
-2. Ruff;
-3. MyPy;
-4. backend tests;
-5. Alembic checks;
-6. frontend lint/type/test;
-7. OpenAPI/codegen drift;
-8. Playwright/E2E where environment allows;
-9. build images.
-
-### F1.07 — Deployment documentation
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `docs: document local staging and production operations`
-
-README + runbooks: local, staging, prod, migrations, backup, rollback, health.
-
-### F1.03 — Завершить automated forbidden-feature scan
-**Исполнитель:** **QWEN-CODER**
-Проверять отсутствие `balance`, `debtors`, `admin` role, browser JWT/Bearer, Flet, Arq, local upload storage и прямых aiogram imports в services.
-
-### F1.04 — Финальный repository hygiene
-**Исполнитель:** **QWEN-CODER**
-Проверить secrets, artifacts, generated junk, lockfiles, reproducible install и clean git status.
-
-### F1.05 — Release candidate verification
-**Исполнитель:** **QWEN-CODER**
-**Commit:** `release: verify mvp release candidate`
-
-Последний прогон всех обязательных проверок на чистом окружении.
+| D1 | `05`: бот обращается «на вы». `07`: ученику «ты», персоналу нейтрально. `07` имеет высший приоритет | Принять `07`, поправить `05` и тексты бота |
+| D2 | `03`: миграции в `src/db/migrations/`. README/план: корневой `alembic/` | **Решено владельцем (Q3):** `src/db/migrations/`, как в `03`. Поправить README и упоминания корневого `alembic/` |
+| D3 | `docs/QWEN.md` и `docs/MY_LMS_BUILD_PLAN_...` написаны для **миграции legacy** (Flet, Arq, JWT, «старый код») | Переписать под режим «чистая сборка»; `QWEN.md` перенести в корень |
+| D4 | Шкалы экзаменов 2026 в `04` §10 взяты из **вторичных источников** | Сверить с официальными (ФИПИ/Рособрнадзор) до боевого запуска |
+| D5 | `09`: репозиторий приватный; фактически публичный | **Решение владельца (Q2):** на время разработки остаётся public; сделать private до появления реальных данных учеников (задача S9.00) |
+| D6 | `02`: «версии — актуальные стабильные», но `package.json` содержит старые | Обновить версии на этапе 0 (по списку с согласованием владельца) |
+| D7 | `09` §7: Sentry может отправлять данные за рубеж | Решение: облачный Sentry (без PII) или самохостинг (GlitchTip/Sentry) — вопрос Q7 |
+| D8 | `07` §12: открытые пункты (имя бота, логотип, слоган, подтверждение пунктов ⚠) | Не блокируют разработку; собрать ответы к этапу 8 |
+
+## 1.7. Итоговая оценка
+
+> Проектная документация — главный актив: по ней можно строить без догадок. **Код — это неработающий каркас**, на 0 % готовности к запуску; его разумно использовать как «заготовки», но каждую часть пройти по `04`/`08`, а не доверять как готовому. Поэтому план начинается с этапа 0 («оздоровление»), а не с новых функций.
 
 ---
 
-# 3. Отдельный сводный список ошибок, который QWEN-CODER должен закрыть
+# 2. Исполнители и правила работы
 
-## Запуск и база
+## 2.1. Роли
 
-- Broken Alembic enum creation.
-- `password_hash NOT NULL` при no-password product model.
-- Некорректный lesson status enum.
-- Naive timestamps вместо `TIMESTAMPTZ`.
-- Downgrade defects в существующих migration constraints.
-- SQLite tests masking PostgreSQL behavior.
+| Метка | Исполнитель | Что делает | Чего НЕ делает |
+|---|---|---|---|
+| 💻 **CODE** | Агент, пишущий код (в документах — QWEN-CODER) | Пишет и правит файлы в репозитории: Python, TypeScript, SQL-миграции (Alembic), тесты, конфиги CI/Docker/nginx, документацию | Не запускает деплой, не правит боевую БД вручную, не придумывает бизнес-правила, не добавляет зависимости без согласования |
+| 🖥️ **TERM** | Агент в терминале на ПК (в документах — OpenCode) | Git и GitHub CLI (ветки, коммиты, push, PR), установка окружения, `uv`/`pnpm`, Docker/Compose, применение миграций, запуск проверок и смоук-тестов, серверы, DNS/SSL, секреты, деплой, бэкапы | Не правит бизнес-код «в обход»: найденный дефект возвращается CODE как отдельная задача. Не «чинит» данные ручным SQL |
+| 👤 **OWNER** | Владелец проекта (человек) | Только то, что агент физически не может: создать бота в BotFather, оплатить VPS/домен, проверить приложение на телефонах, принять решения, подтвердить PR | — |
 
-## Архитектура и стек
+> Задач для 👤 OWNER в плане специально мало и они помечены как «ворота» (gate).
 
-- Poetry/Python 3.10/3.12 вместо uv/Python 3.11.
-- Flet вместо React.
-- Arq вместо TaskIQ.
-- Отдельный bot polling процесс вместо target runtime/webhook model.
-- Local filesystem вместо S3/private presigned URLs.
-- Нет Nginx same-domain deployment.
-- Нет строгих Ruff/MyPy/pre-commit checks.
-- Нет structured JSON logs/Sentry.
-
-## Слои
-
-- Router → repository/DB direct access.
-- Router-level commits.
-- Middleware commits.
-- Repository commit violations.
-- Services without actor/authorization context.
-- Direct aiogram usage from worker/services.
-- Missing centralized exceptions/schemas/time/security modules.
-
-## База данных
-
-- Only legacy 5-table model.
-- Missing reference, profile, guardian, template, participant, assignment, material, extension, file, result, notification, audit tables.
-- Wrong user role model.
-- Wrong lesson relation model.
-- Missing teacher overlap constraint.
-- Missing template occurrence uniqueness.
-- Missing lesson participant billing/attendance/snapshot.
-- Legacy string scores.
-- Missing exam scale metadata.
-- Missing archive/timezone/activity fields.
-
-## Auth/RBAC/privacy
-
-- JWT is primary browser auth instead of Redis session.
-- Session cookie is not effective browser auth.
-- Sessions are not revoked on identity changes.
-- Archived users not enforced.
-- Invitation issue flow absent.
-- `web_login` absent.
-- Relink silently overwrites Telegram ID.
-- Missing relink confirmation/audit.
-- Wrong 403/404 behavior.
-- Student financial leakage.
-- No proper owner bootstrap.
-- Incomplete rate limiting.
-- CSRF does not require Origin.
-- CORS pattern conflicts with same-domain model.
-- Missing security headers.
-- Production OpenAPI not closed.
-
-## API
-
-- No `/api/v1`.
-- Wrong endpoint layout.
-- Standard FastAPI `detail` instead of error envelope.
-- Missing pagination.
-- Missing operation IDs/tags/summaries.
-- Missing reference/admin/student/file endpoints.
-- Missing staff/invitation/archive/reschedule/homework review/finance APIs.
-- Physical lesson delete where spec expects cancellation.
-
-## Business rules
-
-- Balance/debtors exist although forbidden.
-- Earnings use current price instead of snapshot.
-- No group lessons.
-- No attendance/is_billable.
-- No reschedule/cancel reasons and notification contracts.
-- No templates/generation/DST logic.
-- Homework is single-table legacy model.
-- No group assignments.
-- No `needs_revision`/`expired`.
-- No extension journal/max 2.
-- No file count/size/type policy.
-- No post-expiry grading behavior.
-- Mock exam scales are hardcoded/wrong/incomplete.
-- No DB-driven exam scales.
-- No EGE scale/geometry/max-primary rules.
-- No automatic mock exam result creation.
-- Dashboard/reporting is incomplete and uses wrong timezone semantics.
-- Catalog is static.
-
-## Notifications/workers
-
-- No notification outbox.
-- Redis TTL dedup instead of durable dedup.
-- Wrong reminder windows.
-- Wrong homework deadline reminder cadence.
-- Missing notification types.
-- Missing retries/blocked state/quiet hours.
-- Only 3/9 target jobs.
-- New Bot per message.
-
-## Bot
-
-- No AuthMiddleware.
-- Wrong role menus.
-- Missing commands.
-- Missing `setMyCommands` scopes.
-- Missing fallback/error handler.
-- Missing `my_chat_member` handling.
-- `/app` wrong behavior.
-- `/web` absent.
-- No proper deep links.
-- Catalog hardcoded.
-- Text tone/branding mismatch.
-
-## Frontend
-
-- No React frontend at all.
-- No generated API types.
-- No target navigation/screens.
-- No loading/error/empty states.
-- No charts according to spec.
-- No Mini App integration.
-- Legacy Flet contains forbidden password/balance UI.
-
-## Infra/CI/tests
-
-- Incomplete CI.
-- No production compose.
-- No Nginx.
-- No backups.
-- No staging runbook.
-- Postgres/Redis exposed publicly in compose.
-- Hardcoded credentials/debug `print`.
-- README inadequate.
-- Tests lack required negative/security/business/regression coverage.
-
----
-
-# 4. Какой порядок зависимостей считать обязательным
-
-`E0.*` → `E1.*` → `E2.*` → `E3.*` → `E4.*` → `E5.*` → `E6.*` → `E7.*` → `E8.*`
-
-Допускается технически подготовить часть следующего этапа раньше, только если это изолированный foundation commit и он не реализует следующий business flow раньше срока. Например, интерфейс `Notifier` можно создать на этапе 1, но реальные notification use cases — только после этапа 5.
-
-### Нельзя делать раньше соответствующих этапов
-
-- React screens раньше стабильного `/api/v1` contract.
-- Finance UI раньше owner-only finance API.
-- Homework upload UI раньше file/S3 API.
-- Bot notifications раньше durable outbox/Notifier.
-- Lesson generation worker раньше schedule service.
-- Flet removal раньше React replacement.
-- JWT removal раньше Redis-session auth.
-- Balance cleanup раньше finance snapshot flow.
-
----
-
-# 5. Критические контрольные точки для владельца
-
-## После E0
-
-Решены неоднозначности; проект реально поднимается; migration/test baseline воспроизводим.
-
-## После E1
-
-Архитектура и схема БД соответствуют целевой модели; legacy schema больше не является основой проекта.
-
-## После E2
-
-Безопасный вход и RBAC работают; student privacy соблюдается.
-
-## После E3
-
-Расписание является полноценным доменом, включая группы, overlap, attendance, billable, snapshots и timezone/DST.
-
-## После E4
-
-ДЗ и файлы полностью соответствуют ТЗ; локальное хранилище больше не используется.
-
-## После E5
-
-Надёжные уведомления и фоновые задачи работают через outbox + TaskIQ.
-
-## После E6
-
-Пробники, отчёты, dashboard и finance соответствуют бизнес-правилам; balance/debtors полностью удалены.
-
-## После E7
-
-Telegram bot является полноценным интерфейсом доступа и уведомлений по ролям.
-
-## После E8
-
-React + Nginx + CI/CD + backups + E2E образуют целевой продукт; legacy-стек удалён.
-
----
-
-# 6. Definition of Done для каждого commit
-
-Каждый commit считается завершённым только когда:
-
-1. Реализована **только одна** задача этого плана.
-2. Изменения соответствуют `/docs`.
-3. Нет unrelated changes.
-4. Добавлены/обновлены тесты для новой логики.
-5. Пройдены релевантные lint/type/test checks.
-6. Для DB changes пройдены migration checks.
-7. Для API changes проверен OpenAPI contract.
-8. Для security changes есть negative test.
-9. Нет debug `print`, secrets или runtime artifacts.
-10. `git diff --check` проходит.
-11. В PR явно указано, что задача завершена и следующая задача **не выполнялась**.
-
----
-
-# 7. Формат отчёта QWEN-CODER после каждого commit
+## 2.2. Жизненный цикл любой задачи
 
 ```text
-Task: E?.?? — <task title>
-
-Changed:
-- ...
-
-Files:
-- ...
-
-Tests:
-- command: ...
-- result: PASS/FAIL
-
-Migration/API/OpenAPI checks:
-- ...
-
-Commit:
-- <sha> <message>
-
-Remaining:
-- only items outside current task
-
-Next task was not started.
+1. TERM   git fetch origin; git switch -c <тип>/<id>-<slug> origin/main
+2. CODE   читает связанные docs и QWEN.md, реализует ОДНУ задачу + тесты
+3. CODE   отдаёт отчёт (формат — приложение B)
+4. TERM   запускает проверки (ruff, mypy, pytest, alembic, pnpm lint/typecheck/test/build)
+          └─ красное → лог возвращается CODE (TERM не чинит код). Не более 3 итераций, затем эскалация к OWNER
+5. TERM   git add -A; git commit (Conventional Commits, на английском); git push; gh pr create
+6. TERM   gh pr checks --watch  (ждёт зелёный CI)
+7. OWNER  смотрит diff и делает squash-merge (либо делегирует TERM после зелёного CI)
+8. TERM   git switch main; git pull; удалить ветку; если задача операционная — выполнить реальную проверку
+9. СТОП   следующая задача только по явной команде
 ```
+
+Имена веток: `feature/…`, `fix/…`, `refactor/…`, `chore/…`, `test/…`, `docs/…`, `ops/…`.
+Формат коммита: `feat(auth): validate telegram init data`.
+
+## 2.3. Обязательные правила (из `06_agent_rules.md` и `QWEN.md`)
+
+1. **Документация — источник истины.** Не придумывать функции, поля, роли, статусы. При противоречии документов — остановиться и спросить владельца. Приоритет: `07 → 01 → 04 → 08 → остальные`.
+2. **Стек фиксирован** (`02`). Новые зависимости — только с согласованием и записью в ADR.
+3. **Слои бэкенда:** `api/ bot/ worker` → `services/` → `repositories/` → `db/models`. Commit делает только сервис. Репозиторий — только `flush`.
+4. **Время** — только UTC (`timestamptz`), никаких наивных `datetime`. Отображение — на фронтенде в поясе пользователя.
+5. **Права проверяет сервер.** Ответы ученика/менеджера **не содержат** цен и финансов (разные схемы, а не скрытие полей).
+6. **Фронтенд без бизнес-правил;** без `any`, `@ts-ignore`, `dangerouslySetInnerHTML`; тексты только в `texts.ts`; цвета только через токены.
+7. **Тексты бота** — только в `src/core/texts.py`. Язык — русский. Идентификаторы и коммиты — английский. Комментарии — русский.
+8. **Секреты** не попадают в Git, чат, логи, скриншоты. `BOT_TOKEN` вносит владелец сам (задача S1.13).
+9. **Изменение схемы БД = миграция Alembic с рабочим `downgrade`.**
+10. **Определение готовности (DoD) для каждой задачи** — см. `06` часть E (кратко в приложении B).
+
+## 2.4. Как читать задачу в этом плане
+
+```text
+### S3.04 · Название
+Кто: 💻 CODE · Размер: S / M / L
+Зависит от: …              (если не очевидно — предыдущая задача)
+Делает: подробный список действий
+Готово, когда: проверяемый критерий
+Коммит: `тип: описание`
+```
+
+Размер: **S** — меньше часа работы агента, **M** — до нескольких часов, **L** — разбить, если не получается уложиться в один коммит.
 
 ---
 
-# 8. Финальный критерий готовности
-
-Проект нельзя считать исправленным по принципу «старый код теперь запускается». Готовность означает соответствие целевой системе из `/docs`: целевая архитектура, PostgreSQL schema, server-side sessions, owner/manager/student RBAC, group lessons, homework assignments, S3, durable notifications, TaskIQ, DB-driven exams, React SPA, Nginx, CI/CD и security/privacy rules.
-
-Критерий завершения — не количество закрытых тикетов, а отсутствие известных legacy-расхождений из аудита и прохождение полного acceptance/security/integration набора.
-
-## FULL PROJECT — OpenCode production sequence
-
-### F2.01 — Provision production VPS in RF
-**Исполнитель:** **OPENCODE**
-Ubuntu LTS, deploy user, SSH keys, UFW, fail2ban, Docker.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.02 — Configure production DNS and SSL
-**Исполнитель:** **OPENCODE**
-DNS + Let's Encrypt for staging/prod.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.03 — Create production S3 buckets
-**Исполнитель:** **OPENCODE**
-Files/backups, private policy, credentials outside repo.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.04 — Configure production secrets
-**Исполнитель:** **OPENCODE**
-`.env` chmod 600, GitHub environments/secrets.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.05 — Deploy staging via CI
-**Исполнитель:** **OPENCODE**
-Pull images, start compose, migration step, health.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.06 — Configure production webhook
-**Исполнитель:** **OPENCODE**
-BotFather + webhook secret header + allowed updates.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.07 — Run production smoke
-**Исполнитель:** **OPENCODE**
-Owner login, invite, Mini App, homework file, notification.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-### F2.08 — Run backup/restore drill
-**Исполнитель:** **OPENCODE**
-Create backup, restore staging, verify app.
-**DoD:** операция воспроизводима; секреты не попали в Git; результат зафиксирован.
-
-# FULL PROJECT — F3: Родители / guardian role
-
-### F3.01 — Документировать parent role, видимость данных и auth contract до кода.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F1.10
-**DoD:** Спека утверждена владельцем.
-
-### F3.02 — Реализовать parent auth/session только после approval.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F3.01
-**DoD:** Parent не получает teacher notes/finance.
-
-### F3.03 — Добавить parent API с отдельными DTO.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F3.02
-**DoD:** Role isolation покрыта тестами.
-
-### F3.04 — Добавить parent frontend screens.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F3.03
-**DoD:** UI mobile-first и privacy-safe.
-
-### F3.05 — Провести parent staging acceptance.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F3.04
-**DoD:** Нет cross-role leakage.
-
-# FULL PROJECT — F4: Второй мессенджер / MAX adapter
-
-### F4.01 — Убрать Telegram-specific assumptions из notification contracts.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F1.01
-**DoD:** Business services channel-neutral.
-
-### F4.02 — Создать messenger adapter interface.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F4.01
-**DoD:** Telegram adapter остаётся рабочим.
-
-### F4.03 — Получить sandbox credentials/endpoint approved channel.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F4.02
-**DoD:** Secrets outside repo.
-
-### F4.04 — Реализовать второй transport adapter.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F4.03
-**DoD:** Нет aiogram dependencies.
-
-### F4.05 — Добавить integration/failure tests.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F4.04
-**DoD:** Outbox survives channel failure.
-
-# FULL PROJECT — F5: Расширение экзаменов и ежегодное обновление шкал
-
-### F5.01 — Документировать annual scale update procedure.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F1.04
-**DoD:** Есть checklist official-source verification.
-
-### F5.02 — После публикации взять официальные данные следующего года.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F5.01
-**DoD:** Источник сохранён.
-
-### F5.03 — Добавить новые rows/versions в grade_scales.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F5.02
-**DoD:** Старые years остаются доступными.
-
-### F5.04 — Добавить regression vectors.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F5.03
-**DoD:** Все boundary values покрыты.
-
-### F5.05 — Добавить новый exam type по утверждённой спецификации.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F5.03
-**DoD:** No hardcoded exam switch.
-
-### F5.06 — Сделать UI/filters динамическими по exam_types.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F5.05
-**DoD:** UI не предполагает ровно 4 типа.
-
-# FULL PROJECT — F6: Multi-teacher isolation
-
-### F6.01 — Зафиксировать teacher-scoping policy до изменения authorization.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** Owner approval
-**DoD:** Scope semantics documented.
-
-### F6.02 — Добавить server-side teacher scope в services/repositories.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F6.01
-**DoD:** Cross-teacher data blocked.
-
-### F6.03 — Добавить negative cross-teacher tests.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F6.02
-**DoD:** All protected resources covered.
-
-### F6.04 — Добавить staff UI scoping/filtering.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F6.03
-**DoD:** Frontend not security layer.
-
-# FULL PROJECT — F7: Шаблоны ДЗ / банк заданий
-
-### F7.01 — Спроектировать approved template/bank model.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** Owner approval
-**DoD:** Spec before schema.
-
-### F7.02 — Добавить migration/repository/service.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F7.01
-**DoD:** Existing issued homework unchanged.
-
-### F7.03 — Реализовать clone/create-from-template snapshot.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F7.02
-**DoD:** Editing template doesn't mutate issued homework.
-
-### F7.04 — Добавить admin search/filter UI.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F7.03
-**DoD:** Business logic server-side.
-
-### F7.05 — Тесты cloning/versioning.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F7.03
-**DoD:** Regression green.
-
-# FULL PROJECT — F8: iCal / календарная выгрузка
-
-### F8.01 — Зафиксировать feed token/privacy model.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** Owner approval
-**DoD:** Token lifecycle approved.
-
-### F8.02 — Implement read-only iCal feed.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F8.01
-**DoD:** No private notes/finance.
-
-### F8.03 — Implement revoke/rotate feed tokens.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F8.02
-**DoD:** Revocation effective immediately.
-
-### F8.04 — Timezone/DST/cancel/reschedule tests.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F8.03
-**DoD:** Feed matches app state.
-
-# FULL PROJECT — F9: UX/performance hardening
-
-### F9.01 — Accessibility audit and fixes.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** M8
-**DoD:** Touch targets, labels, contrast, keyboard flow.
-
-### F9.02 — Responsive audit 360/390/768/1280.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F9.01
-**DoD:** No critical overflow.
-
-### F9.03 — Audit loading/error/empty/offline/submitting states.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F9.02
-**DoD:** All major screens uniform.
-
-### F9.04 — Bundle/query optimization and N+1 audit.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F9.03
-**DoD:** Student does not receive admin bundle unnecessarily.
-
-### F9.05 — Run periodic staging performance smoke.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F9.04
-**DoD:** No regressions at target scale.
-
-# FULL PROJECT — F10: Compliance/data lifecycle readiness
-
-### F10.01 — Create technical data inventory and role-visibility matrix.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** M6,M8
-**DoD:** Actual API/schema matches inventory.
-
-### F10.02 — Document archive/delete/restore procedures.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F10.01
-**DoD:** Operator-ready runbook.
-
-### F10.03 — Apply retention settings to backups/logs/storage.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F10.02
-**DoD:** Retention verified.
-
-### F10.04 — Add PII leakage regression checks for API/log/Sentry.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F10.01
-**DoD:** Forbidden data triggers failures.
-
-### F10.05 — Prepare privacy-policy technical integration points.
-**Исполнитель:** **QWEN-CODER**
-**Зависит от:** F10.01
-**DoD:** No invented legal claims.
-
-### F10.06 — Run owner/legal checklist before wide launch.
-**Исполнитель:** **OPENCODE**
-**Зависит от:** F10.01
-**DoD:** Legal decisions recorded.
-
-# 10. Финальные Gate'ы
-
-## MVP Gate
-- [ ] Чистая PostgreSQL 16 поднимается с нуля; `alembic upgrade head` проходит; схема соответствует `04`.
-- [ ] Redis используется для server sessions, FSM, TaskIQ broker и rate limits.
-- [ ] Invite-only auth, relink, `/web`, logout, archive/session revoke работают.
-- [ ] Student/manager DTO не содержат finance/private fields; чужие данные маскируются 404.
-- [ ] Group lessons, teacher overlap, templates, DST, attendance, billable и price snapshot работают на реальном PG.
-- [ ] Homework lifecycle, files, extensions≤2, expiry и post-expiry manual grade работают.
-- [ ] Exam scoring — DB-driven; geometry/max-primary rules покрыты.
-- [ ] Outbox/TaskIQ/retries/quiet hours/dedup/block handling работают.
-- [ ] React Student/Admin apps работают в браузере и Telegram; generated API types актуальны.
-- [ ] CI зелёный; Playwright critical path проходит; staging acceptance проходит без ручного SQL.
-
-## Full Project Gate
-- [ ] Production deploy воспроизводим из Git tag и не публикует DB/Redis наружу.
-- [ ] Backup/restore drill успешен; rollback/migration runbook проверен.
-- [ ] Sentry/uptime/heartbeat работают без PII.
-- [ ] Все approved post-MVP функции имеют отдельный контракт, тесты и acceptance.
-- [ ] Ежегодное обновление экзаменационных шкал выполняется из официальных источников без hardcoded thresholds.
-
-# 11. Stop conditions
-- Конфликт документов или бизнес-правил.
-- Изменение стека/зависимостей без approval.
-- Деструктивная миграция или риск потери данных.
-- Неизвестное падение на real PostgreSQL/Redis/S3/Telegram.
-- Незакоммиченные чужие изменения в рабочем дереве.
-- Нехватка credentials/access.
-- Задача требует несвязанного рефакторинга.
-
-# 12. Финальный принцип
-**Не латать legacy — строить target system. Сначала docs/decision → models/migrations → services → API/bot/worker → frontend → real-environment validation → release. После каждой атомарной задачи — проверка, commit, PR, merge, stop.**
+# 3. Вопросы и решения, нужные от владельца
+
+Блокирующие вопросы помечены **🔴**, остальные не мешают старту.
+
+| № | Вопрос | Когда нужен | Предложение по умолчанию |
+|---|---|---|---|
+| Q1 🔴 | Подтвердить: старая реализация удалена, строим на чистом скелете | До S0.03 | Да, строим с нуля по `docs/` |
+| Q2 🔴 | Сделать репозиторий приватным | S0.01 | Да (требование `09`) |
+| Q3 🔴 | Где лежат миграции: корневой `alembic/` или `src/db/migrations/` | S0.04 | Корневой `alembic/` |
+| Q4 🔴 | Версии зависимостей: разрешить обновить фронтенд-зависимости до актуальных стабильных и совместимых | S0.14 | Да |
+| Q5 🔴 | Telegram ID владельца (для `OWNER_TELEGRAM_ID`) | S1.09 | Узнать через любого бота `@userinfobot`, передать агенту |
+| Q6 🔴 | Токены двух ботов из BotFather (dev и staging) | S1.13 | Владелец сам вносит в `.env.local`/на сервер |
+| Q7 | Sentry: облако (без PII) или самохостинг | S9.05 | Облако с `send_default_pii=False` на старте, самохостинг — позже |
+| Q8 🔴 | VPS в РФ (Timeweb/Selectel), домен, S3-бакеты — кто покупает и когда | S1.15 | Купить на этапе 1 (staging нужен для теста Mini App) |
+| Q9 | Как обеспечивать доступ к Telegram с сервера (прокси `TELEGRAM_PROXY_URL` или `TELEGRAM_API_BASE`) | S1.17 | Сначала проверить без прокси, прокси — по результату |
+| Q10 | Подтвердить пункты ⚠ из `07` (тёмная тема, красный для ошибок, обращение «ты» ученику, нижняя панель 3/5 пунктов) | S8.03 | Принять как есть |
+| Q11 | Имя бота (@username), слоган, логотип, фото Романа | S8.10 | Временные значения из `07` |
+| Q12 | Ответственный за сверку шкал ЕГЭ/ОГЭ с официальными источниками | S1.04 | Владелец (или доверенное лицо) до боевого запуска |
+| Q13 | Тариф GitHub: доступна ли защита `main` для приватного репозитория | S0.01 | Если нет — договорённость «только через PR» + проверка в CI |
+| Q14 | Юридическое оформление ПДн (152-ФЗ, согласия, РКН) | S9.09 | Консультация юриста до широкого запуска |
+
+
+## 3.1. Принятые решения владельца (04.10.2026)
+
+| № | Решение | Что меняется в плане |
+|---|---|---|
+| Q1 | Да, строим с нуля по `docs/` | Без изменений |
+| Q2 | Репозиторий **остаётся public** на время разработки | S0.01 не меняет видимость. Компенсирующие меры: `gitleaks` в pre-commit **и в CI** с первого дня, реальные токены/ID — только в `.env.local` (в `.gitignore`), в Git и чат не попадают. Перевод в private — обязательное условие до реальных данных учеников (S9.00, до пилота S9.07) |
+| Q3 | «Как в ТЗ» → миграции в `src/db/migrations/` (`03`, §3) | D2 решён. `alembic.ini` в корне со `script_location = src/db/migrations` (S1.02) |
+| Q4 | Да, обновить зависимости фронтенда до актуальных совместимых | S0.15 выполняется |
+| Q5 | Telegram ID владельца вносит сам | Только в `.env.local` (`OWNER_TELEGRAM_ID`), S1.09/S1.13 |
+| Q6 | Токены ботов вносит сам | Только в `.env.local`, S1.13 |
+| Q7 | Sentry: в разработке не нужен; дальше «как в ТЗ и как проще» | Локально `SENTRY_DSN` пустой (Sentry выключен). В S9.05: облачный Sentry с `send_default_pii=False`. Трансграничность — в S9.09 |
+| Q8 | Хостинг: в разработке всё локально; дальше «как в ТЗ и как проще» | VPS/домен/S3 **перенесены из этапа 1 в новую задачу S9.00**. Рекомендация: один провайдер в РФ (Timeweb Cloud: VPS + S3 + DNS) — проще всего и соответствует ТЗ. До S9.00 слово «staging» = **локальный prod-like стек** (см. примечание перед этапом 0). Mini App на телефоне тестируется через HTTPS-туннель (S1.15) |
+| Q9 | По умолчанию | Сначала проверяем доступность Telegram без прокси; `TELEGRAM_PROXY_URL`/`TELEGRAM_API_BASE` — только при проблемах |
+| Q10 | Явного ответа нет; принято «по умолчанию» | Пункты ⚠ из `07` (тёмная тема, красный для ошибок, «ты» ученику, нижняя панель) принимаются как есть (S8.03) |
+| Q11 | Имя бота: **@romchik_infomat_bot** | Вносится в `07` §2 (S0.04), `BOT_USERNAME` и `VITE_BOT_USERNAME`. Слоган, логотип, фото — позже (S8.10) |
+| Q12 | Шкалы экзаменов сверяет владелец | S1.04 |
+| Q13 | Защита `main` недоступна (тариф) → только через PR | S0.01/S0.18: защиту не включаем. Правило: прямых коммитов в `main` нет, merge делает владелец только при зелёном CI |
+| Q14 | Юридическое оформление ПДн — после реализации | S9.09 остаётся обязательным **до широкого запуска** |
+
+**Принятое допущение:** `@romchik_infomat_bot` — имя будущего **боевого** бота (создаётся к S9.10). Для локальной разработки владелец создаёт отдельного dev-бота (требование `10` §1: данные окружений не смешиваются). Если это не так, поправить S1.13.
+
+---
+
+# 4. Карта этапов и вех
+
+```text
+ЭТАП 0   Оздоровление скелета            → зелёный baseline (lint/types/tests/CI)
+ЭТАП 1   Ядро, БД, вход, ранний staging  → ВЕХА A «Скелет живёт»
+ЭТАП 2   Ученики, сотрудники, приглашения
+ЭТАП 3   Расписание
+ЭТАП 4   ДЗ и файлы                      → ВЕХА B «Рабочее ядро» (можно начинать пилот с 2–3 учениками)
+ЭТАП 5   Уведомления и фоновые задачи
+ЭТАП 6   Пробники и отчёты
+ЭТАП 7   Дашборд, статистика, финансы
+ЭТАП 8   Каталог, бот, дизайн, полировка
+ЭТАП 9   Приёмка, бэкапы, мониторинг     → ВЕХА C «MVP готов» (по `11_roadmap`, раздел «MVP готов»)
+─────────────────────────────────────────────────────────────────
+ПОЛНАЯ ВЕРСИЯ: F1 эксплуатация · F2 родители · F3 MAX · F4 экзамены и ежегодные шкалы ·
+               F5 несколько преподавателей · F6 банк заданий · F7 iCal · F8 Телемост API ·
+               F9 UX/производительность · F10 юридическое/ПДн · F11 устойчивость к блокировкам · F12 тесты
+```
+
+**Принцип порядка внутри этапа** (из `06`, часть D): документация → модели → миграция → схемы → репозитории → сервисы + тесты → REST/бот → воркер → `gen:api` → фронтенд → сверка с `07` → DoD.
+Фронтенд-экран **не начинается**, пока не стабилен соответствующий контракт API.
+
+---
+
+# Примечание о слове «staging» (до задачи S9.00)
+
+Пока не куплен сервер (решение Q8), везде в плане слова «деплой на staging» и «staging-смоук» означают: **полный стек в Docker на ПК** (`app + worker + scheduler + postgres + redis + minio + nginx` со статикой фронтенда, запуск как в `prod`), а для проверок с телефона — доступ через HTTPS-туннель (S1.15). Настоящий сервер появляется в S9.00. Шаги про ufw, SSL и DNS относятся только к S9.00 и S9.10.
+
+# MVP
+
+## Этап 0 · Оздоровление скелета (baseline)
+
+**Цель:** репозиторий собирается, линтеры и типы проходят, CI зелёный, контейнеры поднимаются. Новых функций нет.
+
+### S0.01 · Настройки репозитория и правила работы без защиты `main`
+**Кто:** 🖥️ TERM · **Размер:** S · **Решения:** Q2 (public на время разработки), Q13 (защита `main` недоступна)
+**Делает:**
+- Видимость **не менять** (остаётся public). Записать в `docs/ops/REPO_SETTINGS.md` обязательство: «до появления реальных данных учеников репозиторий переводится в private (S9.00)».
+- Защиту ветки `main` **не включать** (недоступна на тарифе). Вместо неё зафиксировать правила: прямых коммитов в `main` нет; всё через PR; merge (squash) только владелец при зелёном CI; ветка удаляется после merge. Правило дублируется в `QWEN.md` (S0.05).
+- В настройках репозитория включить, что доступно бесплатно: squash-merge как единственный способ, автоудаление веток, Dependabot-оповещения, secret scanning (для public доступно).
+- Проверить, что в истории и файлах нет секретов: `gitleaks detect` по всей истории.
+- Создать метки: `bug`, `feature`, `docs`, `ops`, `blocked`, `needs-owner`, `security`; вехи `Milestone A/B/C`.
+**Готово, когда:** настройки и правила записаны в `docs/ops/REPO_SETTINGS.md`; `gitleaks` чист; метки созданы.
+**Коммит:** `chore: document repository settings`
+
+### S0.02 · Инвентаризация окружения на ПК
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** проверить и записать версии: `git`, `gh` (с авторизацией), `python3.11`, `uv`, `node` (≥ 20), `corepack`/`pnpm`, `docker` + `docker compose`, `psql`/`pg_isready`, `redis-cli`, `mc` (MinIO client) или `aws-cli`, `curl`, `jq`. Недостающее — установить штатными средствами ОС (без `sudo`-экспериментов; при необходимости спросить OWNER).
+**Готово, когда:** в `docs/ops/LOCAL_ENV.md` таблица «инструмент → версия → ОК»; `docker run hello-world` работает; Docker доступен для `testcontainers`.
+**Коммит:** `docs: add local environment checklist`
+
+### S0.03 · Контрольная проверка «как есть»
+**Кто:** 🖥️ TERM · **Размер:** S · **Зависит от:** Q1
+**Делает:** на чистом клоне выполнить и сохранить вывод: `uv sync`, `ruff check .`, `ruff format --check .`, `mypy --strict src`, `python -c "import src.main"`, `pytest`, `pnpm install`, `pnpm lint`, `pnpm typecheck`, `pnpm build`. Сводку положить в `docs/audit/baseline-2026-10-04.md` (счётчики ошибок, первые 5 причин по каждой команде).
+**Готово, когда:** отчёт совпадает с разделом 1.5 (или уточняет его).
+**Коммит:** `docs: add baseline audit report`
+
+### S0.04 · ADR по противоречиям документации
+**Кто:** 💻 CODE · **Размер:** M · **Зависит от:** Q3, Q4
+**Делает:**
+- Создать `docs/adr/` и записи ADR-0001…: D1 (на «вы»/«ты»), D2 (миграции в `src/db/migrations/`, решение Q3), D3 (устаревшие QWEN/план), D4 (шкалы), D6 (версии), D7 (Sentry).
+- Внести минимальные правки в `03`, `05`, README в соответствии с решениями; в `05` добавить ссылку на `07` §8.
+- Внести в `07` §2 имя бота `@romchik_infomat_bot` (решение Q11); в README и `03` убрать упоминания корневого `alembic/`.
+- Не менять бизнес-правила; если находится новое противоречие — вынести вопрос владельцу.
+**Готово, когда:** каждое противоречие D1–D8 имеет статус «решено» или «ждёт владельца» (с номером вопроса Q*).
+**Коммит:** `docs: record adr for documentation conflicts`
+
+### S0.05 · `QWEN.md` / `AGENTS.md` для режима «чистая сборка»
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** перенести `docs/QWEN.md` в корень; убрать разделы про миграцию legacy (Flet, Arq, JWT, «старый код»); оставить правила веток, слоёв, транзакций, времени, безопасности, тестов; добавить раздел «Роли агентов» (CODE/TERM) и «Цикл задачи» из раздела 2.2. Устаревший `docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md` пометить в начале «Исторический документ (план миграции legacy). Актуальный план — `docs/IMPLEMENTATION_PLAN.md`», а этот файл положить в `docs/IMPLEMENTATION_PLAN.md`.
+**Готово, когда:** в корне есть `QWEN.md`; в нём нет упоминаний legacy-стека как цели; план лежит в `docs/`.
+**Коммит:** `docs: adapt agent instructions for clean build`
+
+### S0.06 · Автоформатирование (отдельным коммитом)
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `ruff format .` и `ruff check . --fix` (только безопасные правки: сортировка импортов, newline в конце файла, `Optional → | None`).
+**Готово, когда:** diff содержит только форматирование; нет изменений поведения (`git diff --stat` просмотрен).
+**Коммит:** `style: apply ruff autofix and formatting`
+
+### S0.07 · Чиним синтаксис, импорты и запуск
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:**
+- Исправить синтаксические ошибки (`src/api/deps.py` и остальные 14 `invalid-syntax`).
+- Исправить `undefined-name` (20 шт.), неиспользуемые импорты, `B008` (использовать `Annotated[..., Depends()]`).
+- Исправить типы столбцов: JSONB (`Mapped[dict[str, Any]] = mapped_column(JSONB)`), ENUM-подход (выбрать единый: нативные PG ENUM или `VARCHAR + CHECK` — записать в ADR).
+- Убрать из бота несуществующий `message.conf`: данные из middleware передаются через аргументы хэндлера.
+- **Не добавлять функций.** Только довести до состояния «импортируется и проходит линтеры».
+**Готово, когда:** `python -c "import src.main"` работает; `ruff check .` — 0 ошибок; `mypy --strict src` — список оставшихся ошибок сокращён до тех, что относятся к S0.08/S0.12 (заведены в issues).
+**Коммит:** `fix: repair syntax errors and imports`
+
+### S0.08 · Приведение `pyproject.toml` в порядок
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** один источник dev-зависимостей (убрать дубль `[project.optional-dependencies].dev` vs `[tool.uv].dev-dependencies` — оставить `[dependency-groups]`); перенести настройки Ruff в `[tool.ruff.lint]`; добавить недостающие зависимости из `02` (например, `slowapi` или собственный лимитер — решить в ADR; `argon2-cffi` **не** добавлять); добавить `python-json-logger` в корректную секцию; проверить, что нет блокирующих библиотек (`requests`, `psycopg2`, `boto3`); указать версии как диапазоны.
+**Готово, когда:** `uv lock` выполняется без ошибок (проверит TERM в S0.09).
+**Коммит:** `chore: tidy pyproject dependencies and tooling`
+
+### S0.09 · Lock-файл и окружение бэкенда
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `uv lock`; `uv sync --frozen --all-extras`; `uv run pytest --collect-only` (должно быть «no tests», без ошибок импорта); закоммитить `uv.lock`.
+**Готово, когда:** чистая установка по `uv sync --frozen` воспроизводима.
+**Коммит:** `chore: add uv lockfile`
+
+### S0.10 · Dockerfile, `.env.example`, compose
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:**
+- `Dockerfile` бэкенда: multi-stage, `python:3.11-slim`, установка через `uv --frozen`, непривилегированный пользователь, `HEALTHCHECK` на `/health`; `.dockerignore`.
+- `.env.example` — **все** переменные из `02` раздел 7, без реальных значений, с комментариями (русский). `frontend/.env.example` — `VITE_API_BASE_URL`, `VITE_BOT_USERNAME`, `VITE_SENTRY_DSN`.
+- `docker-compose.yml`: убрать устаревшее `version`, единое имя env-файла (`.env.local`), healthcheck для `app`, отдельный одноразовый сервис `migrate` (`alembic upgrade head`) как зависимость `app`, инициализация бакета MinIO.
+- `docker-compose.prod.yml`: не публиковать порты postgres/redis, убрать bind-mount исходников, `restart: unless-stopped`, лимиты логов (`max-size`, `max-file`).
+- Согласовать `config.py`: читать `.env.local` локально; в `prod` значения обязательны.
+**Готово, когда:** `docker compose config` без ошибок; `docker build .` проходит.
+**Коммит:** `feat: add backend dockerfile and env templates`
+
+### S0.11 · Поднять локальную инфраструктуру
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `cp .env.example .env.local` (значения-заглушки для локали); `docker compose up -d postgres redis minio`; дождаться healthy; создать бакет `lms-files` (`mc alias set`, `mc mb`); убедиться, что бакет **приватный**; проверить `pg_isready`, `redis-cli ping`, расширение: `psql -c "CREATE EXTENSION IF NOT EXISTS btree_gist;"` (проверка доступности).
+**Готово, когда:** три сервиса healthy, бакет создан; инструкции — в `docs/ops/LOCAL_ENV.md`.
+**Коммит:** `docs: describe local infrastructure bootstrap`
+
+### S0.12 · Инфраструктура тестов
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `tests/unit`, `tests/integration`, `tests/conftest.py` (фикстуры: PostgreSQL и Redis через `testcontainers`, async-сессия с откатом, клиент FastAPI `httpx.AsyncClient`, `time-machine`), фабрики данных (users, lessons…), `pytest.ini`-настройки в `pyproject.toml`; первые тесты: `/health`, `timeutils`, `hash_token`, конфигурация. Режим CI: использовать service containers вместо `testcontainers` (переключатель переменной окружения).
+**Готово, когда:** `pytest` зелёный локально (с Docker); покрытие отчёт формируется.
+**Коммит:** `test: add backend test infrastructure`
+
+### S0.13 · Ядро `core/`: конфиг, логи, ошибки, время
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:**
+- `config.py`: валидаторы (в `prod` пустые `BOT_TOKEN`, `SESSION_SECRET`, `WEBHOOK_SECRET` → ошибка старта; `SESSION_SECRET` ≥ 32 байт).
+- `logging.py`: JSON в stdout, `request_id`, без ПДн (в логах только `user_id`).
+- `exceptions.py`: `AppError`, `NotFoundError`, `PermissionDeniedError`, `ValidationError`, `ConflictError`, `BusinessRuleError`, `ExternalServiceError` + коды для ответов.
+- Глобальные обработчики FastAPI → единый формат `{"error": {"code","message","details"}}` (`08` §1).
+- `timeutils.py`: `utcnow()`, конвертация локальное ↔ UTC по IANA, запрет наивных `datetime`; заменить все 12 `datetime.now()`.
+- `enums.py`: единый подход с ENUM (см. S0.07).
+**Готово, когда:** тесты на ошибки/время/конфиг; `grep -R "datetime.now()" src` пуст.
+**Коммит:** `feat: harden core config logging errors and time utils`
+
+### S0.14 · Каркас приложения: lifespan, health, middleware
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `main.py`: Sentry (`send_default_pii=False`, фильтр токенов/`initData`), Redis-клиент, S3-клиент (aioboto3), Aiogram `Bot`/`Dispatcher` (режим `polling` в фоновой задаче или `webhook` + `set_webhook` + секрет-заголовок), корректное закрытие; middleware: `request_id`, проверка `Origin` и `X-Requested-With` на `POST/PATCH/PUT/DELETE` (кроме webhook); `GET /health` проверяет БД и Redis; закрыть `/openapi.json`, `/docs` на `prod`; CORS только в `local`.
+**Готово, когда:** тесты на `/health` (ok/деградация), на CSRF-проверку (403 без заголовка), на закрытый OpenAPI в `prod`.
+**Коммит:** `feat: implement app lifespan health checks and middleware`
+
+### S0.15 · Базовая настройка фронтенда
+**Кто:** 💻 CODE · **Размер:** M · **Зависит от:** Q4
+**Делает:**
+- Составить таблицу обновления зависимостей (актуальные стабильные, совместимые между собой): `date-fns` + `@date-fns/tz`, `openapi-typescript` + `openapi-fetch`, ESLint (flat config) + `typescript-eslint`, `vite`, `react-router`, `@telegram-apps/sdk-react`. Применить после согласования Q4.
+- Настроить: `tsconfig` (`strict`, `noUncheckedIndexedAccess`), алиас `@/`, ESLint (запрет `any`, `no-restricted-imports` для Telegram SDK вне `lib/telegram.ts`), Prettier, Vitest + Testing Library + MSW, Tailwind с токенами из `07` §3.4 (`styles/tokens.css`), шрифты через Fontsource (самохостинг: Unbounded, Inter, Montserrat 900 — по `07` §4.1).
+- Убрать `(window as any)` в `lib/telegram.ts` — типизировать через минимальный интерфейс.
+- `frontend/vite.config.ts`: прокси `/api` на `localhost:8000`.
+**Готово, когда:** `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` проходят (проверит TERM в S0.16).
+**Коммит:** `chore: modernize frontend toolchain and tokens`
+
+### S0.16 · Установка и lock фронтенда
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `corepack enable`; `pnpm install` (создаёт `pnpm-lock.yaml`); запуск `lint`, `typecheck`, `test`, `build`; `docker build -f frontend/Dockerfile .` (нужен корректный контекст — при ошибке вернуть CODE).
+**Готово, когда:** все четыре команды зелёные; образ собирается; lock закоммичен.
+**Коммит:** `chore: add pnpm lockfile`
+
+### S0.17 · CI и pre-commit
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:**
+- `.github/workflows/ci.yml`: **backend** (`uv sync --frozen`, ruff check/format, `mypy --strict`, `pytest` с service containers PostgreSQL/Redis, позже `alembic upgrade/downgrade`), **frontend** (`pnpm install --frozen-lockfile`, lint, typecheck, test, `pnpm audit --audit-level high`, build), задача **drift типов API** (экспорт OpenAPI скриптом → `pnpm gen:api` → `git diff --exit-code frontend/src/api/schema.d.ts`; включается, когда появится `scripts/export_openapi.py` в S1.10).
+- `.pre-commit-config.yaml`: ruff, mypy, ESLint/Prettier, проверка секретов (`gitleaks`), `check-added-large-files`, `end-of-file-fixer`.
+**Готово, когда:** workflow валиден (`actionlint`, если доступен).
+**Коммит:** `ci: add backend and frontend verification pipeline`
+
+### S0.18 · Прогон CI и дисциплина PR
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** push ветки, `gh run watch`, разбор красных шагов (возврат CODE); защита `main` недоступна (Q13), поэтому договорённость «merge только при зелёном CI» фиксируется в `QWEN.md` и в шаблоне PR (`.github/pull_request_template.md` с чек-листом DoD); `pre-commit install`; `pre-commit run --all-files`.
+**Готово, когда:** CI зелёный на `main`.
+
+### 🚪 Ворота G0 — «Baseline зелёный»
+- [ ] `ruff`, `mypy --strict`, `pytest`, `pnpm lint/typecheck/test/build` — зелёные локально и в CI.
+- [ ] `docker compose up` поднимает postgres/redis/minio; `app` стартует и отвечает на `/health`.
+- [ ] Репозиторий приватный; `QWEN.md` в корне; ADR оформлены.
+
+---
+
+## Этап 1 · Ядро, БД, вход, тонкий срез и ранний staging
+
+**Цель:** от кнопки в Telegram до данных в БД. Снять главный технический риск: работает ли Mini App (cookie, `initData`) на реальных iOS и Android. Поэтому staging с HTTPS нужен **уже здесь**.
+
+### S1.01 · Сверка моделей с `04_database_schema.md`
+**Кто:** 💻 CODE · **Размер:** L (разбить по файлам: reference, users, schedule, homework, exam, service)
+**Делает:** пройти каждую таблицу из `04` и привести модели к схеме: типы (`BIGINT IDENTITY`, `TIMESTAMPTZ`, `JSONB`), `NOT NULL`/`DEFAULT`, `CHECK` (например, `extensions_count 0..2`, `end_at > start_at`, `weekday 1..7`), `UNIQUE` (`telegram_id`, `(template_id,start_at)`, `(homework_id,student_id)`), внешние ключи и `ON DELETE`, индексы, `EXCLUDE USING gist` для пересечения уроков (с `btree_gist`), `created_at/updated_at`. Добавить тест «соответствие метаданных» — сверка таблиц/колонок с контрольным списком из `04`.
+**Готово, когда:** тест соответствия зелёный; `Base.metadata` содержит все 21 таблицу из `04`.
+**Коммит:** `refactor(db): align models with database schema`
+
+### S1.02 · Alembic и первая миграция
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `alembic.ini` в корне со `script_location = src/db/migrations`, `src/db/migrations/env.py` (async, URL из конфига, `compare_type`), naming convention для ограничений; **одна чистая начальная миграция**: расширение `btree_gist`, все таблицы, ограничения, индексы, enum-типы; рабочий `downgrade`. Скрипт `scripts/export_openapi.py` (экспорт без запуска сервера) — для CI.
+**Готово, когда:** миграция генерируется без дрейфа (`alembic check` пуст).
+**Коммит:** `feat(db): add initial alembic migration`
+
+### S1.03 · Сиды справочников и шкал
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** данные в версионируемом файле (`src/db/seeds/…`): `subjects` (2), `exam_types` (4, с `max_primary` и `config={"min_geometry":2}` для ОГЭ математики), `grade_scales` 2026 из `04` §10 (ЕГЭ информатика 0–29, ЕГЭ профильная математика 0–32, ОГЭ информатика 0–21, ОГЭ математика 0–31). Идемпотентный `scripts/seed_reference.py`. Помечено как «ожидает сверки» до S1.04. Тест: полнота строк (30 + 33 + 22 + 32).
+**Готово, когда:** повторный запуск сида не создаёт дублей.
+**Коммит:** `feat(db): add reference seeds and exam scales`
+
+### S1.04 · Сверка шкал с официальными источниками
+**Кто:** 👤 OWNER (Q12) + 💻 CODE · **Размер:** S · **Может идти параллельно**
+**Делает:** владелец по официальным документам ФИПИ/Рособрнадзора (ОГЭ — письмо Рособрнадзора, ЕГЭ — утверждённые шкалы) подтверждает или правит таблицы; CODE обновляет сид и убирает пометку «ожидает сверки».
+**Готово, когда:** в `docs/04` §10 указаны официальные источники и дата сверки. **Блокирует только боевой запуск**, не разработку.
+
+### S1.05 · Применение миграции на реальной БД
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `alembic upgrade head` → `alembic downgrade base` → `upgrade head`; `scripts/seed_reference.py`; через `psql` проверить: все таблицы, наличие `EXCLUDE`-ограничения (попытка вставить два пересекающихся урока одного преподавателя должна упасть), `CHECK`-ограничения, уникальные индексы; сохранить вывод `\d` ключевых таблиц в отчёт.
+**Готово, когда:** отчёт приложен к PR; найденные расхождения оформлены как задачи для CODE.
+
+### S1.06 · Репозитории, Unit of Work, `CurrentUser`
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** базовый репозиторий (принимает `AsyncSession`, только `flush`); `CurrentUser` (dataclass: `id`, `role`, `timezone`); привести **все** сервисные методы к сигнатуре `(actor: CurrentUser, …)`; зависимости сессии: FastAPI-зависимость, middleware бота, контекст воркера; запрет ленивых загрузок (`selectinload/joinedload`).
+**Готово, когда:** `grep "actor: User" src` пуст; тесты на откат транзакции при исключении.
+**Коммит:** `refactor: introduce current user and unit of work`
+
+### S1.07 · Ядро безопасности
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `secrets.token_urlsafe(32)`, SHA-256-хэш; **валидация Telegram `initData`** (HMAC-SHA256 по алгоритму WebApp, `auth_date` ≤ 24 ч, сравнение через `hmac.compare_digest`); тесты на положительные/отрицательные примеры (подмена, просрочка, пустые поля).
+**Готово, когда:** ≥ 10 тестов, включая подделанную подпись и устаревший `auth_date`.
+**Коммит:** `feat(security): validate telegram init data and token hashing`
+
+### S1.08 · Серверные сессии, зависимости, CSRF, rate limit
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** хранилище сессий в Redis (256-битный id, TTL: 30 дней ученик / 7 дней персонал, обновление скользящим окном); cookie `HttpOnly; Secure; SameSite=Lax; Path=/`; зависимости `current_user`, `require_role`; удаление всех сессий пользователя (архив, смена роли, смена `telegram_id`); rate limiting по `08` §10 (Redis-счётчики): `/auth/*` — 10/мин на IP, остальное — 120/мин на пользователя.
+**Готово, когда:** тесты: просроченная сессия → 401; архивный пользователь → отказ; превышение лимита → 429 `rate_limited`.
+**Коммит:** `feat(auth): add redis sessions csrf and rate limiting`
+
+### S1.09 · `AuthService` и владелец
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Зависит от:** Q5
+**Делает:** `create_invite` (новое приглашение отзывает прежние; TTL 7 дней), `accept_invite` (одноразовость, чужой `telegram_id` → отказ, другой `telegram_id` у профиля → подтверждение), `confirm_relink`, `revoke_invite`, `create_web_login_link` (TTL 10 минут), `consume_web_login` (только POST), `unlink_telegram`; создание владельца по `OWNER_TELEGRAM_ID` при старте и скрипт `scripts/create_owner.py`; запись в `audit_log` для каждого события из `04` §7.2.
+**Готово, когда:** тесты US-01: одноразовость, TTL (через `time-machine`), перепривязка, занятый `telegram_id`, rate limit неудачных попыток (5 за 10 минут).
+**Коммит:** `feat(auth): implement invitation and relink flows`
+
+### S1.10 · REST: `/auth/*` и `/me`
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `POST /auth/telegram`, `POST /auth/link`, `POST /auth/logout`, `GET /me`, `PATCH /me` по `08` §2: Pydantic-схемы запросов/ответов, `tags`, `summary`, стабильные `operation_id`, модели всех кодов ответа; обновить `08` при отклонениях.
+**Готово, когда:** интеграционные тесты со всеми кодами (200/401/403/422/429); `scripts/export_openapi.py` формирует `openapi.json`.
+**Коммит:** `feat(api): add auth endpoints and me`
+
+### S1.11 · Фундамент бота
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `bot/client.py` — единая точка исходящих запросов к Telegram (`TELEGRAM_API_BASE`, `TELEGRAM_PROXY_URL`); `AuthMiddleware` (кладёт `current_user`/`None` в аргументы хэндлера); команды `/start`, `/start inv_<token>`, `/app`, `/web`, `/logout`, `/help` по `05` §2–3; FSM `ConfirmRelinkState` (Redis, TTL 1 час); меню по ролям (ReplyKeyboard, кнопка `web_app`); `setMyCommands` по `BotCommandScopeChat`; глобальный error handler; тексты — только `core/texts.py` (по `07` §8.3); `callback.answer()` везде. Каталог и `/today`, `/hw` — позже.
+**Готово, когда:** тесты хэндлеров с моками Telegram: гость, ученик, персонал, невалидный/использованный/просроченный токен.
+**Коммит:** `feat(bot): add start invitation and web login flows`
+
+### S1.12 · Фронтенд: тонкий срез
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `lib/telegram.ts` (чтение `initData`, тема, кнопка «Назад»), `api/client.ts` + `unwrap` + `errors.ts`, `useMe`, `RequireRole`, `LoginPage` (автовход из Telegram; вход по ссылке `/login/:token` с кнопкой «Войти» — токен гасится только POST), страница «Привет, {имя}»; сгенерированные типы `schema.d.ts` (`pnpm gen:api`); тесты (`RequireRole`, ошибки, `unwrap`).
+**Готово, когда:** `pnpm test` зелёный; нет прямых импортов Telegram SDK вне `lib/telegram.ts`.
+**Коммит:** `feat(frontend): add auth thin slice`
+
+### S1.13 · Боты в BotFather и секреты
+**Кто:** 👤 OWNER + 🖥️ TERM · **Размер:** S
+**Делает:** владелец создаёт в BotFather отдельного **dev-бота** (не `@romchik_infomat_bot`, он зарезервирован под боевую среду, `10` §1), получает токен и **сам** вписывает его и свой Telegram ID (`OWNER_TELEGRAM_ID`) в `.env.local` на ПК (в чат/Git не отправлять; репозиторий public, поэтому особенно важно); TERM выставляет права файла `chmod 600`, проверяет, что `.env*` в `.gitignore`, запускает `gitleaks detect`.
+**Готово, когда:** токен проверен вызовом `getMe` (в логе виден только `username`).
+
+### S1.14 · Локальная сквозная проверка
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** `docker compose up`; `BOT_MODE=polling`; `scripts/create_owner.py`; в Telegram: `/start` → меню владельца; создать тестового ученика (через SQL-скрипт только в локальной БД допустимо; лучше `scripts/dev_create_student.py`, который напишет CODE) → получить приглашение → открыть как второй аккаунт → «Ученик подключился»; `/web` → одноразовая ссылка; проверить повторное использование. Результаты — в `docs/ops/SMOKE_STAGE1.md`.
+**Готово, когда:** все шаги пройдены; баги заведены задачами CODE.
+
+### S1.15 · Локальный HTTPS-туннель для Mini App
+**Кто:** 🖥️ TERM (+ 👤 OWNER: проверка с телефона) · **Размер:** S · **Решение:** Q8 (сервера пока нет)
+**Зачем:** Mini App открывается в Telegram только по HTTPS, а cookie `Secure` не работают по `http`. Без этого тест на телефонах (S1.18) невозможен.
+**Делает:**
+- Установить бесплатный туннель как **инструмент разработчика, не зависимость проекта** (рекомендация: Cloudflare Tunnel `cloudflared` в режиме quick tunnel без аккаунта; допустим аналог). Пробросить локальный nginx → получить адрес `https://<случайное>.trycloudflare.com`.
+- Адрес меняется при каждом запуске: написать `scripts/dev_tunnel.sh` (запускает туннель, печатает адрес и напоминает обновить `PUBLIC_BASE_URL` и допустимый `Origin` в `.env.local`; кнопку меню dev-бота в BotFather на этот адрес владелец обновляет сам).
+- Проверить доступность адреса с телефона из мобильной сети и из Telegram.
+- Если туннели недоступны из вашей сети, вернуть вопрос владельцу: запасной вариант — арендовать минимальный VPS уже сейчас (досрочно выполнить часть S9.00).
+**Готово, когда:** страница «Привет» открывается по `https://…` с телефона; инструкция в `docs/ops/LOCAL_ENV.md` (без секретов).
+**Коммит:** `docs: add local https tunnel instructions`
+
+### S1.16 · Nginx и полный локальный compose
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `nginx/conf.d/default.conf`: `/` → статика SPA (`try_files $uri /index.html`), `/api/`, `/telegram/`, `/health` → `app:8000`, `client_max_body_size 12m`, кеширование `/assets/*` (immutable), `index.html` — `no-cache`, gzip/brotli, заголовки безопасности (`nosniff`, `Referrer-Policy: no-referrer`, CSP только со своим доменом, `frame-ancestors` для доменов Telegram — уточнить в S1.19). TLS на локальном стеке завершает туннель; блок SSL и HSTS на уровне сервера добавляются в S9.00. Профиль `full` в `docker-compose.yml`: `app + worker + scheduler + nginx` со сборкой фронтенда.
+**Готово, когда:** `nginx -t` проходит в контейнере (проверит TERM); `docker compose --profile full config` валиден.
+**Коммит:** `feat(ops): add nginx config and full local compose profile`
+
+### S1.17 · Первый полный прогон локально (prod-like)
+**Кто:** 🖥️ TERM · **Размер:** M · **Зависит от:** Q9
+**Делает:** собрать образы; `docker compose --profile full up -d`; шаг миграций (`alembic upgrade head` в одноразовом контейнере); сиды; запустить туннель (S1.15); установить webhook на адрес туннеля (`BOT_MODE=webhook`, секретный путь + заголовок `X-Telegram-Bot-Api-Secret-Token`, `allowed_updates=message,callback_query,my_chat_member`); проверить `getWebhookInfo` (`last_error_message` пуст) и `/health`. Для повседневной разработки остаётся `BOT_MODE=polling`. Проверить исходящую доступность `api.telegram.org` с ПК: прокси (`TELEGRAM_PROXY_URL`/`TELEGRAM_API_BASE`) настраивать **только если есть проблемы** (Q9).
+**Готово, когда:** `/start` в dev-боте отвечает через webhook; вход владельца работает; результат в `docs/ops/LOCAL_FULLSTACK.md`.
+
+### S1.18 · Тест Mini App на реальных устройствах (главный риск)
+**Кто:** 👤 OWNER + 🖥️ TERM · **Размер:** M
+**Делает:** владелец на **iOS и Android** открывает `web_app`-кнопку dev-бота (адрес — через туннель из S1.15): проверить загрузку, автовход по `initData`, сохранение cookie между запусками, тему (светлая/тёмная), кнопку «Назад», безопасные зоны; TERM собирает логи nginx/app. Результат — ADR «Cookie vs запасной bearer-токен в памяти» (`03` §7).
+**Готово, когда:** ADR принят. Если cookie блокируются → создаётся задача S1.19.
+
+### S1.19 · (Условно) Запасной механизм сессии без cookie
+**Кто:** 💻 CODE · **Размер:** M
+**Выполняется только если S1.18 показал проблему.** Короткоживущий bearer-токен хранится **только в памяти** приложения (не в `localStorage`), выдаётся тем же `POST /auth/telegram`; обновить `03`, `08`, `09`.
+
+### 🚪 Ворота G1 — Веха A «Скелет живёт»
+- [ ] Владелец входит через Telegram на локальном стеке (через HTTPS-туннель) на iOS и Android.
+- [ ] Приглашение ученика и вход по `/web`-ссылке работают.
+- [ ] Миграции применяются и откатываются; тесты безопасности авторизации зелёные.
+- [ ] Решение по cookie принято (ADR).
+
+
+---
+
+## Этап 2 · Ученики, сотрудники, приглашения
+
+**Цель:** персонал заводит учеников и сотрудников, выдаёт приглашения. Приватность ролей проверяется автоматически.
+
+### S2.01 · Схемы по ролям и тест «нет утечек»
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** отдельные Pydantic-схемы для `student`, `manager`, `owner` (поля `lesson_price`, `price_snapshot`, `is_billable`, `teacher_notes`, `teacher_note`, суммы **не включаются** в схемы ученика и менеджера, а не «скрываются»). Автотест контракта: обходит OpenAPI-схемы ответов эндпоинтов `/student/*` и `/admin/*` (для менеджера) и падает, если находит запрещённое поле. Тест запускается на каждом следующем этапе автоматически.
+**Готово, когда:** тест зелёный и красный на искусственно добавленном `lesson_price` в схему ученика (проверено).
+**Коммит:** `test: add role schema privacy contract test`
+
+### S2.02 · `StudentService`
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `create_student` (профиль, предметы, часовой пояс, ссылки только `https://`, цена — только owner), `update_student` (изменение цены пишется в `audit_log`), `archive/restore` (удаляет сессии, не удаляет данные), `list_students` (поиск `q`, фильтр `active/archived`, пагинация), `get_student_card` (разные DTO по роли), `unlink_telegram`, флаги «бот заблокирован» / «приглашение не принято» в списке.
+**Готово, когда:** тесты прав (менеджер не видит и не меняет цену; ученик → 403/404), аудит, сессии удаляются при архивации.
+**Коммит:** `feat(students): implement student service`
+
+### S2.03 · `StaffService` (только owner)
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `create_staff` (`manager`/`owner`), `change_role` (запись в аудит + удаление сессий), приглашение сотрудника, архивация; защита «нельзя архивировать последнего владельца».
+**Готово, когда:** тесты: менеджер → 403 на все `/admin/staff*`.
+**Коммит:** `feat(staff): implement staff management`
+
+### S2.04 · Admin API: ученики, приглашения, сотрудники
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** эндпоинты `08` §5.2 и §5.3 (создание, правка, архив/восстановление, приглашение с одноразовым показом токена, отзыв, `unlink-telegram`, сотрудники); пагинация `limit/offset/total`; единый формат ошибок.
+**Готово, когда:** интеграционные тесты US-01 и матрицы прав `08` §8 (включая негативные).
+**Коммит:** `feat(api): add admin students and staff endpoints`
+
+### S2.05 · Фронтенд: каркас, layouts, общие компоненты
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `StudentLayout` (нижняя панель по `07` §7.1), `AdminLayout` (мобильный список + десктоп-сайдбар, `07` §7.2), `PageHeader`, `StatusBadge` (по таблице `07` §6.6), `EmptyState`, `ErrorState` с «Повторить», `PageSkeleton`, компоненты `ui/` (кнопки, поля, карточки, tabs, диалоги/шторки, тосты) по `07` §6; `lib/texts.ts` (словарь `07` §8.2); ленивая загрузка админ-части (`React.lazy`).
+**Готово, когда:** тесты: `RequireRole`, `StatusBadge` (все статусы), смоук-рендер layouts на 360 и 1280 px.
+**Коммит:** `feat(frontend): add layouts and shared components`
+
+### S2.06 · Фронтенд: админ — ученики и сотрудники
+**Кто:** 💻 CODE · **Размер:** L (разбить на список / карточка / форма+приглашение / сотрудники)
+**Делает:** экраны `07` §9.2.2–9.2.4 и 9.2.13: список (карточки на мобильном, таблица на десктопе), поиск, фильтры, карточка с вкладками (вкладки «Уроки», «ДЗ», «Пробники», «Финансы» — пока скрытые/заглушки с пометкой этапа), форма (react-hook-form + Zod; цена только для owner), экран приглашения (копировать, поделиться, перевыпустить, отозвать), сотрудники (owner).
+**Готово, когда:** тесты форм на границы; в рендере менеджера нет цены (тест).
+**Коммит:** `feat(frontend): add admin students and staff screens`
+
+### S2.07 · Фронтенд: профиль ученика
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** `07` §9.1.7: имя, класс, часовой пояс (`PATCH /me`), кнопка «Войти в браузере», выход.
+**Коммит:** `feat(frontend): add student profile screen`
+
+### S2.08 · Тесты безопасности этапа
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** сводный набор: ученик → чужие данные (404), менеджер → финансы (403), CSRF (нет `X-Requested-With`/неверный `Origin`), rate limiting `/auth/*`, повторное использование приглашения, перепривязка.
+**Готово, когда:** набор зелёный и помечен маркером `security` (отдельный шаг в CI).
+**Коммит:** `test(security): add auth and privacy regression suite`
+
+### S2.09 · Проверка этапа: `gen:api`, смоук на staging
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** `python scripts/export_openapi.py` → `pnpm gen:api` → `git diff --exit-code`; все проверки; деплой на staging; ручной смоук: владелец → ученик → приглашение → второй аккаунт принимает → менеджер не видит цену (через REST `curl` с cookie менеджера). Отчёт `docs/ops/SMOKE_STAGE2.md`.
+
+### 🚪 Ворота G2
+- [ ] Владелец создаёт ученика и сотрудника, приглашения работают на staging.
+- [ ] Тест «нет утечек» и security-набор зелёные.
+
+---
+
+## Этап 3 · Расписание
+
+**Цель:** полноценное расписание: разовые и групповые уроки, шаблоны, перенос, отмена, отметка проведения, снимок цены, корректные часовые пояса.
+
+### S3.01 · Время и часовые пояса
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `timeutils`: «локальное время + IANA-пояс → UTC», итерация по дням недели с учётом **перехода на летнее/зимнее время**, границы суток пользователя. Тесты: Europe/Moscow, Europe/Kaliningrad, Asia/Yekaterinburg, а также пояс с DST (например, Europe/Berlin) — для проверки корректности алгоритма.
+**Готово, когда:** ≥ 15 тестов на границы суток и DST.
+**Коммит:** `feat(core): add timezone-safe schedule helpers`
+
+### S3.02 · Создание урока и защита от пересечений
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `ScheduleService.create_lesson` (предмет, участники, время, переопределения ссылок, тема); перевод нарушения `EXCLUDE` в `ConflictError(lesson_overlap)` с понятным сообщением («В это время уже есть урок»); участники — активные ученики.
+**Готово, когда:** тест US-02 «пересечение запрещено»; групповой урок с N участниками.
+**Коммит:** `feat(schedule): create lessons with overlap protection`
+
+### S3.03 · Перенос, отмена, отметка проведения
+**Кто:** 💻 CODE · **Размер:** L (разбить на три коммита)
+**Делает:**
+- `reschedule_lesson`: меняет `start_at/end_at`, ставит `is_detached=true`, аудит; ожидающие напоминания теряют актуальность (проверка по `start_epoch`).
+- `cancel_lesson`: только персонал; `reason`, `billable_student_ids`; аудит.
+- `complete_lesson`: по участникам `attended / no_show / cancelled`, `is_billable` (по умолчанию: `attended` → true, остальные → false); **`price_snapshot` фиксируется в момент отметки**; последующая смена цены не влияет.
+**Готово, когда:** тесты: смена цены после отметки не меняет сумму; нельзя завершить отменённый урок; повторная отметка корректна.
+**Коммит:** `feat(schedule): implement reschedule cancel and complete`
+
+### S3.04 · Шаблоны расписания и генерация
+**Кто:** 💻 CODE · **Размер:** L (разбить: CRUD шаблонов / генерация / правка шаблона)
+**Делает:** CRUD шаблонов (`weekday`, `start_local_time`, `timezone`, участники, период); `generate_lessons(horizon_weeks)`: идемпотентно (`UNIQUE (template_id,start_at)`, `INSERT … ON CONFLICT DO NOTHING`), горизонт из `SCHEDULE_HORIZON_WEEKS`, `generated_until`; правка шаблона затрагивает **только будущие неизменённые** (`is_detached=false`) уроки; пауза/отключение; ручной эндпоинт принудительной генерации.
+**Готово, когда:** тесты US-02: повторный запуск без дублей; изменённый вручную урок не перезаписывается; переход DST не сдвигает локальное время урока.
+**Коммит:** `feat(schedule): add templates and idempotent generation`
+
+### S3.05 · REST расписания (student и admin)
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `GET /student/lessons`, `GET /student/lessons/{id}` (ссылки Телемоста/доски: переопределение → профиль; без цен, заметок и личных данных других участников — в групповом уроке только число участников); эндпоинты `08` §5.4; фильтры по периоду ≤ 1 года.
+**Готово, когда:** тест «нет утечек» зелёный; чужой урок → 404.
+**Коммит:** `feat(api): add schedule endpoints`
+
+### S3.06 · Бот: расписание
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** `/today` и кнопка «Расписание» для ученика (уроки на 24 часа, кнопки Телемост/Доска) и для персонала (компактная сводка).
+**Коммит:** `feat(bot): add today and schedule commands`
+
+### S3.07 · Фронтенд: `lib/datetime.ts`
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** единственное место форматирования дат: пояс пользователя (`me.timezone`), «Сегодня/Завтра/Среда, 16 октября», «через 2 ч 15 мин»; запрет `Date`-методов, зависящих от пояса устройства (правило ESLint).
+**Готово, когда:** тесты на границы суток и разные пояса.
+**Коммит:** `feat(frontend): add timezone-aware datetime helpers`
+
+### S3.08 · Фронтенд: админ-расписание
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `07` §9.2.5–9.2.7: мобильный список дня / десктопная сетка недели; создание урока и шаблона (предпросмотр ближайших дат); отметка проведения (присутствие, «Засчитать занятие», цена снимка — только owner); ошибка пересечения.
+**Коммит:** `feat(frontend): add admin schedule screens`
+
+### S3.09 · Фронтенд: расписание ученика
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `07` §9.1.1–9.1.3: герой с ближайшим уроком, группировка по дням, переключатель «Список/Неделя», карточка урока (Телемост/Доска или подсказка «Ссылку добавит Роман»); скелетоны, пусто, ошибка.
+**Коммит:** `feat(frontend): add student schedule screens`
+
+### S3.10 · Проверка этапа
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** все проверки; `gen:api`; деплой на staging; смоук: шаблон «вт/пт 17:00», `generate`, повторный `generate` (без дублей — проверить SQL `count`), пересечение (ожидаем 409), перенос и отмена; проверка DST прогоном тестов с `time-machine` на CI; отчёт.
+
+### 🚪 Ворота G3
+- [ ] Расписание ведётся на staging; групповые уроки, шаблоны и пересечения работают.
+- [ ] Заработок по снимку цены корректен на тестовых данных (проверка SQL).
+
+---
+
+## Этап 4 · Домашние задания и файлы
+
+**Цель:** полный цикл ДЗ: выдача, сдача, проверка, возврат, переносы дедлайна, истечение. Хранение файлов — только в S3.
+
+### S4.01 · Хранилище S3
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** абстракция хранилища (`aioboto3`): `put`, `delete`, `presign_get` (TTL 10 минут); ключи `homework/{assignment_id}/{uuid}.{ext}` и `materials/{homework_id}/{uuid}.{ext}`; конфигурация MinIO/S3 из env.
+**Готово, когда:** тесты с замоканным клиентом; интеграционный тест против MinIO — помечен `integration`.
+**Коммит:** `feat(storage): add s3 storage abstraction`
+
+### S4.02 · Реальная проверка хранилища
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** MinIO локально и бакет staging: приватная политика (анонимный доступ запрещён — проверить `curl` без подписи → 403), загрузка и presigned-ссылка (проверить истечение), отдельный бакет бэкапов.
+
+### S4.03 · `FileService`
+**Кто:** 💻 CODE · **Размер:** L (разбить: валидация / обработка изображений / сервис)
+**Делает:** лимиты: ≤ 10 файлов решения на выдачу, ≤ 10 МБ, `jpeg/png/heic/pdf`; проверка **содержимого** (magic bytes), а не только расширения; HEIC → JPEG (`pillow-heif`), сжатие (длинная сторона ≤ 2400 px, JPEG 85) в `asyncio.to_thread`; имя в S3 — UUID; запись в `homework_files`; `GET /files/{id}/url` с проверкой прав (ученик — только свои, персонал — все).
+**Готово, когда:** тесты: подмена расширения, превышение размера (413 `file_too_large`), неверный тип (415 `unsupported_file_type`), 11-й файл, чужой файл → 404.
+**Коммит:** `feat(files): add file service with validation and image processing`
+
+### S4.04 · Создание и выдача заданий
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `create_homework` (`regular`/`mock_exam`; `max_score` = число заданий; для пробника `exam_type_id` обязателен и `max_score` по умолчанию из `exam_types`), выдача нескольким/группе: **одно `homework` + N выдач**, каждая со своим статусом и оценкой; `due_mode` `next_lesson`/`fixed`; `add_assignees`; материалы преподавателя.
+**Готово, когда:** тест US-03.
+**Коммит:** `feat(homework): create and assign homework`
+
+### S4.05 · Сдача решений
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `submit_files` (требует ≥ 1 файла), `submit_self_reported` («Сделал»), удаление/замена своих файлов до проверки; статусы только `assigned`/`needs_revision`; `expired` сдать нельзя; чужая выдача → 404; фиксируется `on_time`.
+**Готово, когда:** тесты US-04.
+**Коммит:** `feat(homework): implement submissions`
+
+### S4.06 · Проверка, возврат, оценка
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `grade_assignment` (балл 0…`max_score`, иначе 400 `score_out_of_range`; комментарий; файлы проверки), `return_for_revision` (комментарий + новый `due_at`, по умолчанию следующее занятие), оценка `expired` выдачи вручную с флагом `graded_after_expiry` и записью в аудит.
+**Готово, когда:** тесты US-06 (кроме конвертации пробников — этап 6).
+**Коммит:** `feat(homework): implement grading and revision`
+
+### S4.07 · Перенос дедлайна
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `extend_deadline`: новый дедлайн = начало ближайшего следующего `scheduled` урока ученика после текущего `due_at`; если урока нет — ручная дата (тоже перенос); **максимум 2** переноса (`extensions_count`); журнал `homework_extensions`; только в статусах `assigned/needs_revision`.
+**Готово, когда:** тесты US-05: третья попытка → 400 `homework_extension_limit`.
+**Коммит:** `feat(homework): implement deadline extensions`
+
+### S4.08 · Истечение выдач (сервисная функция)
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** `expire_due_assignments`: `now() > due_at AND extensions_count = 2 AND status IN (assigned, needs_revision)` → `expired`, `expired_at`; идемпотентно; создаёт событие для уведомления (подключится на этапе 5). Периодическая задача — этап 5.
+**Коммит:** `feat(homework): add assignment expiry service`
+
+### S4.09 · REST ДЗ и файлов
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `08` §4 (student), §5.5 (admin), §6 (files); `is_overdue`, `extensions_left` (без деталей журнала) в ответе ученика; multipart-загрузка; rate limit загрузки 30 файлов за 10 минут.
+**Готово, когда:** тест «нет утечек» зелёный; матрица прав `08` §8 покрыта тестами.
+**Коммит:** `feat(api): add homework and files endpoints`
+
+### S4.10 · Фронтенд: админ — ДЗ
+**Кто:** 💻 CODE · **Размер:** L (разбить: список+создание / очередь / экран проверки)
+**Делает:** `07` §9.2.8–9.2.9: список «сдали N из M», форма (тип, число заданий, материал, срок, выбор учеников/«вся группа»), очередь проверки, экран проверки (просмотр фото: масштаб, перелистывание; балл, комментарий, файлы проверки; «Вернуть»; «Перенести на следующее занятие» с «Осталось 1 из 2»).
+**Коммит:** `feat(frontend): add admin homework screens`
+
+### S4.11 · Фронтенд: ДЗ ученика
+**Кто:** 💻 CODE · **Размер:** L
+**Делает:** `07` §9.1.4–9.1.5: вкладки «Активные / На проверке / Проверено», карточка ДЗ, загрузчик файлов (прогресс, удаление, лимиты), «Сдать» (неактивна без файлов), «Сделал», состояния `needs_revision`/`expired`, чип результата «11 из 13 · 85%». Тесты экрана по всем статусам.
+**Коммит:** `feat(frontend): add student homework screens`
+
+### S4.12 · Проверка этапа на реальных файлах
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** `curl`-смоук на local и staging: JPEG, PNG, **HEIC**, PDF, файл > 10 МБ, `.jpg` с содержимым `.exe`, 11-й файл; проверить, что `client_max_body_size` nginx пропускает 10 МБ; ключ в S3 — UUID; чужой файл → 404; presigned-ссылка истекает; все проверки; `gen:api`; деплой.
+
+### 🚪 Ворота G4 — Веха B «Рабочее ядро»
+- [ ] Репетитор на staging: ученик → расписание → ДЗ → оценка. Можно начинать **пилот с 2–3 учениками** (уведомлений ещё нет — напоминать вручную).
+- [ ] Негативные тесты (чужие данные, лимиты, `expired`) зелёные.
+
+---
+
+## Этап 5 · Уведомления и фоновые задачи
+
+**Цель:** надёжная доставка по схеме outbox: ничего не теряется, нет дублей, тихие часы соблюдаются.
+
+### S5.01 · `Notifier` и `TelegramNotifier`
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** интерфейс `Notifier` (сервисы не импортируют `aiogram`); `TelegramNotifier` через `bot/client.py`; `TelegramForbiddenError` → `users.bot_blocked=true`, уведомление `skipped`; сетевые ошибки → повтор.
+**Коммит:** `feat(notify): add notifier interface and telegram implementation`
+
+### S5.02 · Outbox и диспетчер
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `NotificationService.enqueue` (запись в той же транзакции, уникальный `dedup_key`, `INSERT … ON CONFLICT DO NOTHING`); `dispatch_due` — `SELECT … FOR UPDATE SKIP LOCKED`, проверка актуальности перед отправкой (урок отменён/перенесён → `skipped`), **тихие часы 22:00–08:00 по поясу получателя** (несрочные → 08:00, срочные — сразу), повторы 1/5/15 минут, затем `failed` + Sentry, небольшая пауза между отправками.
+**Готово, когда:** тесты: дедупликация, тихие часы, срочность (урок < 12 ч), отмена → `skipped`, блокировка бота.
+**Коммит:** `feat(notify): implement outbox dispatcher`
+
+### S5.03 · TaskIQ: брокер, воркер, планировщик
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `worker/broker.py` (Redis), задачи с контекстом сессии, `scheduler` (строго один экземпляр), задача `heartbeat` (пинг Healthchecks, адрес из env), корректное завершение.
+**Коммит:** `feat(worker): wire taskiq broker and scheduler`
+
+### S5.04 · Периодические задачи
+**Кто:** 💻 CODE · **Размер:** L (разбить по группам)
+**Делает:** по `03` §9: `dispatch_due_notifications` (1 мин), `generate_lesson_reminders` (за 30 минут, 1 мин), `generate_homework_reminders` (за 24 ч, 5 мин), `expire_homework_assignments` (5 мин), `notify_unmarked_lessons` (через 1 час после окончания, 15 мин), `generate_scheduled_lessons` (ежедневно 03:00), `send_morning_digest` (каждый час, у кого сейчас 08:00), `cleanup_tokens` (ежедневно), `heartbeat` (5 мин). `dedup_key` по шаблонам `05` §6.4 (`lesson_reminder:{lesson_id}:{student_id}:{start_epoch}` и т. д.).
+**Готово, когда:** тесты на каждую задачу с `time-machine`: ровно 30 минут, нет повторов при перезапуске, перенос урока создаёт новое напоминание.
+**Коммит:** `feat(worker): add periodic notification and maintenance tasks`
+
+### S5.05 · События уведомлений в сервисах
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** подключить `enqueue` в `HomeworkService` и `ScheduleService`/`AuthService` для типов из `05` §6: `homework_assigned/graded/returned/submitted/expired`, `lesson_cancelled`, `lesson_rescheduled`, `student_joined`; тексты — `core/texts.py` (тон по `07` §8.3: ученику «ты»).
+**Коммит:** `feat(notify): enqueue notifications from domain events`
+
+### S5.06 · Утренняя сводка
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** сообщение в 08:00 по поясу получателя: уроки сегодня, ДЗ на проверку (число + топ-5), несданное к сегодняшним урокам, уроки без отметки, дедлайны ближайших 24 часов, кнопка «Открыть Admin App». Строка про заработок для owner добавляется на этапе 7.
+**Коммит:** `feat(notify): add morning digest`
+
+### S5.07 · Блокировка бота
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** обработчик `my_chat_member` (`kicked` → `bot_blocked`); значок в Admin App (фронтенд — маленькая правка списка учеников).
+**Коммит:** `feat(bot): handle chat member updates`
+
+### S5.08 · Проверка в реальных условиях
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** запустить `worker` и `scheduler` в compose (локально и на staging); создать урок через 31 минуту → получить напоминание ровно за 30; ДЗ с дедлайном → напоминание за 24 ч (сдвинуть время тестовыми данными); тихие часы (урок утром — уведомление не ночью); **остановить Redis на 1 минуту и запустить снова — уведомления не теряются и не дублируются**; остановить воркер и запустить — очередь догоняется; `getWebhookInfo`; убедиться, что запущен ровно один `scheduler`. Отчёт `docs/ops/SMOKE_STAGE5.md`.
+
+### 🚪 Ворота G5
+- [ ] Все типы уведомлений из `05` работают; тихие часы и дедупликация подтверждены на staging.
+
+---
+
+## Этап 6 · Пробные экзамены и отчёты
+
+### S6.01 · `ExamService`: конвертация баллов
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `convert_score` по таблице `grade_scales` с максимальным `valid_year ≤ года экзамена`; нестандартный `max_primary` → `converted_value=NULL` и `scale_applicable=false`; правило ОГЭ математики: геометрия `< 2` → оценка 2 (при отсутствии `geometry_score` — предупреждение); шкалы **не хардкодятся**.
+**Готово, когда:** тесты по **границам** всех четырёх шкал (например, ОГЭ информатика: 4→2, 5→3, 10→3, 11→4, 16→4, 17→5), правило геометрии, пробник «27 баллов по информатике ЕГЭ».
+**Коммит:** `feat(exams): implement score conversion`
+
+### S6.02 · Результаты пробников
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `record_mock_result`; автосоздание/обновление `mock_exam_results` при оценке ДЗ типа `mock_exam`; ручной ввод без ДЗ; `GET/POST/PATCH/DELETE /admin/mock-exams` (`08` §5.6; удалять можно только ручные); `/reference/exam-types`, `/reference/subjects`.
+**Коммит:** `feat(exams): add mock exam results and api`
+
+### S6.03 · Отчёты
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `StatsService.student_report` по формулам `04` §11: средний процент ДЗ по ISO-неделям `graded_at` (в поясе ученика; `expired` без оценки не входит), «% в срок», серия пробников; `GET /student/reports`, `GET /admin/students/{id}/report`; без финансов у ученика и менеджера.
+**Готово, когда:** тесты формул на фиксированных данных.
+**Коммит:** `feat(stats): add student reports`
+
+### S6.04 · Фронтенд: пробники и отчёты
+**Кто:** 💻 CODE · **Размер:** L
+**Делает:** админ: `07` §9.2.10 (форма ввода, мгновенная конвертация, «Шкала не применима»), показ конвертации на экране проверки пробника, вкладка «Пробники и прогресс»; ученик: `07` §9.1.6 (Recharts: линия «средний процент ДЗ», пробники, «Сдано в срок», текстовая сводка для доступности).
+**Коммит:** `feat(frontend): add mock exams and reports`
+
+### S6.05 · Проверка этапа
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** после миграции сверить строки `grade_scales` SQL-запросом с таблицей из `04` §10 (количество и границы); смоук на staging: пробник ОГЭ и ЕГЭ → график; `gen:api`; все проверки.
+
+### 🚪 Ворота G6
+- [ ] Конвертация подтверждена тестами на границах и сверкой в БД; графики показывают данные.
+
+---
+
+## Этап 7 · Дашборд, статистика, финансы
+
+### S7.01 · Дашборд «Сегодня»
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `GET /admin/dashboard/today` по `01` §4.3: (1) уроки сегодня, (2) очередь проверки, (3) не сдали к сегодняшним урокам, (4) прошедшие без отметки, (5) дедлайны в 24 часа, (6) только owner — `earned_month`/`expected_month`. Именованные запросы в репозиториях, **без N+1**; разные схемы для owner и manager.
+**Коммит:** `feat(dashboard): add today dashboard`
+
+### S7.02 · Финансы и статистика
+**Кто:** 💻 CODE · **Размер:** L (разбить)
+**Делает:** `StatsService.earnings` (заработано = `SUM(price_snapshot)` по billable; ожидается = по запланированным урокам по текущей цене; разрезы неделя/месяц/ученик/предмет), `cancellations` (персонал), `export_csv` (только owner, период ≤ 1 года), `GET /admin/audit` (owner).
+**Готово, когда:** тесты US-07: смена цены не меняет уже проведённые уроки; менеджер → 403 на все финансовые эндпоинты; CSV без лишних полей.
+**Коммит:** `feat(finance): add earnings stats and csv export`
+
+### S7.03 · Строка заработка в сводке и боте
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** строка «Заработано в этом месяце: N ₽» только для owner; `/today` для персонала использует `DashboardService`.
+**Коммит:** `feat(notify): add earnings line to owner digest`
+
+### S7.04 · Фронтенд: дашборд и финансы
+**Кто:** 💻 CODE · **Размер:** L
+**Делает:** `07` §9.2.1 (герой, блоки, «Всё в порядке» для пустых, сетка в 2 колонки на десктопе), вкладка «Финансы» в карточке ученика (owner), экран `07` §9.2.11 (период, срезы, карточки, график, «Экспорт CSV»); у менеджера финансовых элементов нет (тест).
+**Коммит:** `feat(frontend): add dashboard and finance screens`
+
+### S7.05 · Демо-данные
+**Кто:** 💻 CODE · **Размер:** S
+**Делает:** `scripts/seed_demo.py`: до 100 учеников, уроки, ДЗ, пробники (только для local/staging, защита от запуска в `prod`).
+
+### S7.06 · Проверка производительности
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** загрузить демо-данные на staging/локально; `EXPLAIN (ANALYZE, BUFFERS)` для запросов дашборда, расписания, отчётов; подсчёт числа SQL-запросов на запрос API (логирование запросов SQLAlchemy); замечания (N+1, отсутствие индексов) → задачи CODE. Целевая планка: типовые экраны отвечают быстро (договориться значением с владельцем, ориентир — до 300 мс при 100 учениках).
+
+### 🚪 Ворота G7
+- [ ] Дашборд и финансы корректны на демо-данных; менеджер не получает финансовых данных ни в одном ответе.
+
+---
+
+## Этап 8 · Каталог, бот, дизайн, полировка
+
+### S8.01 · Каталог услуг
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `CatalogService` и `/admin/catalog` (CRUD, порядок, публикация), `GET /catalog`; бот: «Каталог услуг» с листанием через `edit_message_text`, пустой каталог → «Каталог скоро появится…», «Связаться с преподавателем» — URL-кнопка `TEACHER_CONTACT_URL`; фронтенд: `07` §9.2.12 (перетаскивание порядка).
+**Коммит:** `feat(catalog): add catalog service api bot and admin screen`
+
+### S8.02 · Завершение бота
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `/hw` (ученик — активные ДЗ с deep link; персонал — очередь), deep links в Mini App (`/app/homework/123`, `/admin/...`), `setMyCommands` для гостя/ученика/персонала, финальная вычитка текстов `texts.py` по `07` §8.3, архивный пользователь → «Доступ закрыт, обратитесь к преподавателю».
+**Коммит:** `feat(bot): complete commands deep links and texts`
+
+### S8.03 · Применение дизайна `07` ко всем экранам
+**Кто:** 💻 CODE · **Размер:** L (разбить по группам экранов)
+**Зависит от:** Q10
+**Делает:** пройти чек-лист `07` §11 по каждому экрану: токены вместо hex, шрифты через `font-display/heading/body`, один амбер-акцент на экране, одна главная кнопка, радиусы 8/12/16, только line-art иконки, тёмная тема, 360 и 1280 px, нет `backdrop-filter`.
+**Готово, когда:** чек-лист заполнен для каждого экрана (файл `docs/ops/UI_REVIEW.md`).
+**Коммит:** `style(frontend): apply design system to all screens`
+
+### S8.04 · Состояния интерфейса
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** на каждом экране с данными: загрузка (скелетон), ошибка («Повторить»), пусто, данные, отправка (кнопки блокируются); нет сети; тексты ошибок сервера по кодам из `08`.
+**Коммит:** `feat(frontend): complete ui states and error texts`
+
+### S8.05 · Производительность и безопасность фронтенда
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** ленивая загрузка админ-части, бюджет бандла (размер — зафиксировать в CI), нет внешних скриптов/шрифтов/картинок (тест на CSP), внешние ссылки только `https://` + `rel="noopener noreferrer"`, Sentry без PII и с очисткой токенов из URL.
+**Коммит:** `perf(frontend): lazy admin bundle and security hardening`
+
+### S8.06 · Сквозные и компонентные тесты
+**Кто:** 💻 CODE · **Размер:** L
+**Делает:** Playwright: «вход → сдача ДЗ → оценка → уведомление» (с подменой Telegram `initData`); Vitest/MSW по списку `06` B7 (`datetime`, `unwrap`, `RequireRole`, формы на границах, экран ДЗ по статусам, отсутствие финансов у ученика и менеджера).
+**Коммит:** `test: add e2e and frontend regression tests`
+
+### S8.07 · Аудит бэкенда
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** по замечаниям S7.06: индексы, N+1, `selectinload`; `/openapi.json` закрыт на `prod`; единые заголовки безопасности; проверка `grep` на запрещённое (`balance`, `debtors`, `argon2`, Flet, Arq, JWT, `boto3`, `requests`, `psycopg2`, импорты `aiogram` в `services/`) — оформить как тест в CI («forbidden-feature scan»).
+**Коммит:** `chore: add forbidden feature scan and query optimizations`
+
+### S8.08 · Прогон E2E на стеке
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** поднять полный стек в Docker; `playwright install`; запуск E2E; сохранить отчёты/видео; ошибки → задачи CODE.
+
+### S8.09 · Проверки безопасности окружения
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** `gitleaks detect` по всей истории; `pip-audit` / `uv`-аудит и `pnpm audit`; сканирование образов (`trivy image`, если доступен); проверка сервера: открытые порты (`nmap`), `ufw`, `fail2ban`, SSH без пароля, права `.env` (600), БД/Redis недоступны снаружи; заголовки (`curl -I`: HSTS, CSP, `nosniff`); `/openapi.json` на `prod` закрыт.
+**Готово, когда:** отчёт `docs/ops/SECURITY_CHECK.md`; критические замечания закрыты.
+
+### S8.10 · Брендинг и открытые пункты
+**Кто:** 👤 OWNER (+ 🖥️ TERM для файлов) · **Размер:** S
+**Делает:** владелец выбирает имя бота, слоган, предоставляет логотип/фото (Q11); настраивает в BotFather имя, описание («Репетитор по информатике и математике: ОГЭ и ЕГЭ…»), аватар, меню; TERM кладёт статические файлы (иконки, аватар) в `frontend/public` через PR.
+
+### 🚪 Ворота G8
+- [ ] Чек-лист `07` §11 пройден по всем экранам; E2E и security-проверки зелёные; нет запрещённых функций (scan).
+
+---
+
+## Этап 9 · Приёмка, бэкапы, мониторинг, запуск MVP
+
+### S9.00 · Хостинг: выбор, покупка и настройка реального staging
+**Кто:** 👤 OWNER + 🖥️ TERM · **Размер:** L · **Решение:** Q8 («как в ТЗ и как проще») · **Зависит от:** G8
+**Выбор по умолчанию:** по ТЗ (`02`) — VPS в РФ и S3 в РФ. Чтобы было проще, всё у одного провайдера (рекомендация: Timeweb Cloud: VPS + S3 + DNS; домен регистрируется там же). Ubuntu LTS, 2 vCPU / 4 ГБ / 40+ ГБ SSD.
+**👤 OWNER:** покупает VPS, домен и S3 (два бакета: `files`, `backups`); добавляет открытый SSH-ключ TERM на сервер (закрытые ключи и пароли в чат не отправлять); **переводит репозиторий в private** (`gh repo edit RomanNik24/LMS_TUTOR_TG --visibility private --accept-visibility-change-consequences`) — обязательное условие до загрузки реальных данных учеников (Q2).
+**🖥️ TERM:** пользователь деплоя без root и в группе `docker`, SSH только по ключам, `ufw` (22/80/443), `fail2ban`, часовой пояс UTC, Docker + Compose plugin, DNS `stg.<домен>`, Let's Encrypt (`certbot`, автообновление), `/opt/lms/staging`, `.env` (`chmod 600`); SSL-блок и HSTS в nginx (правка конфига — задача CODE); первый деплой, миграции, сиды, webhook, `getWebhookInfo`; проверка доступности `api.telegram.org` с сервера — при проблемах прокси (Q9).
+**Готово, когда:** `https://stg.<домен>` работает по HTTPS; `/start` в staging-боте отвечает; репозиторий private; `ufw status` и `nmap` портов проверены; отчёт `docs/ops/STAGING.md` (без секретов).
+
+### S9.01 · CI/CD: сборка образов и деплой
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** workflow по `10` §6: после зелёных проверок на `main` — сборка образов `app` и `nginx` (с фронтендом), публикация в GHCR (или реестр провайдера), деплой на **staging** по SSH (`docker compose pull && up -d`), отдельный шаг миграций **до** запуска новой версии (при ошибке деплой останавливается), деплой на **prod** — только после ручного подтверждения (environment protection). Откат: предыдущий тег образов (+ `alembic downgrade`, если миграция обратима). Миграции совместимы с предыдущей версией кода (expand/contract).
+**Коммит:** `ci: add image build and deploy workflows`
+
+### S9.02 · Секреты и окружения GitHub
+**Кто:** 🖥️ TERM · **Размер:** S
+**Делает:** `gh secret set` для `SSH_HOST`, `SSH_USER`, `SSH_KEY`; GitHub environments `staging`/`prod` (ручное подтверждение для `prod`); значения вносит OWNER непосредственно в терминал TERM (в историю не попадают).
+
+### S9.03 · Бэкапы
+**Кто:** 💻 CODE · **Размер:** M
+**Делает:** `scripts/backup.sh` (`pg_dump -Fc` → сжатие → загрузка в бакет бэкапов, хранение **14 дней**, шифрование на стороне хранилища либо `gpg`, пинг Healthchecks об успехе/ошибке), `scripts/restore.sh`, runbook восстановления.
+**Коммит:** `ops: add backup and restore scripts`
+
+### S9.04 · Бэкапы в работе и проверка восстановления
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** расписание (cron/systemd timer, 03:30 UTC); разовый запуск; **восстановление на staging** (развернуть дамп в чистую БД, проверить число строк по таблицам, запустить приложение, пройти смоук); синхронизация/версионирование файлов S3; запись результата в `docs/ops/RESTORE_DRILL.md`. Повторять ежемесячно.
+**Готово, когда:** восстановление успешно (**обязательное условие MVP**).
+
+### S9.05 · Мониторинг и алерты
+**Кто:** 🖥️ TERM · **Размер:** M
+**Решение (Q7):** облачный Sentry (проще всего) с `send_default_pii=False`, фильтр токенов и `initData`; локально Sentry был выключен (пустой `SENTRY_DSN`). Оценка трансграничной передачи данных — в S9.09.
+**Делает:** Sentry для бэкенда и фронтенда (без PII); внешний uptime-монитор `https://<домен>/health` раз в минуту; Healthchecks для heartbeat воркера и бэкапов; алерты владельцу (Telegram/почта); ротация логов Docker; алерты диска/памяти у провайдера; мониторинг `getWebhookInfo.last_error_message`. Prometheus/Grafana **не** ставить (`02`).
+**Готово, когда:** тестовая ошибка видна в Sentry без персональных данных; остановка воркера вызывает алерт.
+
+### S9.06 · Полный прогон на staging
+**Кто:** 🖥️ TERM · **Размер:** M
+**Делает:** деплой через CI; сценарий «приглашение → вход → расписание → ДЗ → оценка → уведомления» **без ручных правок БД**; проверка отката (задеплоить предыдущий тег, убедиться, что работает).
+
+### S9.07 · Пилот на ~10 тестовых пользователях (2 недели)
+**Кто:** 👤 OWNER + 🖥️ TERM · **Размер:** L (по времени)
+**Зависит от:** S9.00 (репозиторий уже private)
+**Делает:** владелец ведёт реальное расписание и ДЗ ≥ 10 учеников две недели; TERM собирает ошибки из Sentry/логов и заводит GitHub Issues (`bug`, `needs-owner`); еженедельная сводка.
+**Готово, когда:** нет критичных сбоев две недели подряд.
+
+### S9.08 · Цикл исправлений по пилоту
+**Кто:** 💻 CODE (+ 🖥️ TERM) · **Размер:** по числу замечаний
+**Делает:** каждое замечание — отдельная задача (ветка → тест → PR). Приоритет: потеря данных, утечка приватных данных, пропуск уведомлений, неверные суммы/оценки.
+
+### S9.09 · Юридический минимум перед широким запуском
+**Кто:** 👤 OWNER · **Размер:** M · **Зависит от:** Q14
+**Делает:** пройти чек-лист `09` §7: статус оператора ПДн (152-ФЗ), политика обработки, согласия (для несовершеннолетних — от законного представителя), порядок обращений, места и сроки хранения, трансграничная передача (Telegram, Sentry). Консультация юриста. *(Не юридическая консультация.)*
+
+### S9.10 · Боевая среда (prod)
+**Кто:** 🖥️ TERM (+ 👤 OWNER: оплата, доступы) · **Размер:** L
+**Делает:** повторить S9.00 для `app.<домен>` (боевой бот `@romchik_infomat_bot`): отдельная БД, отдельный бакет, отдельный **боевой** бот, `.env` (600), SSL, DNS, webhook; `/openapi.json` закрыт; `alembic upgrade head` + сиды (только справочники); создание владельца; перенос учеников — вручную (~20); смоук-тест на prod.
+**Готово, когда:** вход владельца на prod, приглашение боевого ученика, бэкап prod сделан.
+
+### S9.11 · Приёмка MVP и релиз
+**Кто:** 🖥️ TERM + 👤 OWNER · **Размер:** S
+**Делает:** пройти «Определение MVP готов» (`11`):
+1. Этапы 0–8 выполнены, тесты зелёные (бэкенд и фронтенд).
+2. Сценарий «приглашение → вход → расписание → ДЗ → оценка → уведомления» проходит на staging без ручных правок БД.
+3. Владелец ведёт реальное расписание и ДЗ ≥ 10 учеников две недели без критичных сбоев.
+4. Бэкап восстановлен успешно.
+5. Все экраны соответствуют `07_design.md`.
+6. Проверено на реальных iOS и Android в Telegram и в браузере на десктопе.
+Затем тег `v1.0.0`, `CHANGELOG.md`, архивация открытых вопросов.
+
+### 🚪 Ворота G9 — Веха C «MVP готов»
+
+---
+
+# Полная версия (после MVP)
+
+Все пункты ниже стартуют **только** после G9. Для каждого действует правило: **сначала обновить документацию (владелец согласует), потом код**.
+
+## F1 · Эксплуатация и устойчивость
+| № | Кто | Задача |
+|---|---|---|
+| F1.01 | 💻 CODE | Dependabot/Renovate: ежемесячные PR с обновлениями `uv`/`pnpm` + прогон CI |
+| F1.02 | 🖥️ TERM | Регламент `10` §11: еженедельно Sentry/диск; ежемесячно — проверка восстановления бэкапа и обновление образов; скрипты-напоминания |
+| F1.03 | 🖥️ TERM | Проверка и документирование отката релиза (учения раз в квартал) |
+| F1.04 | 💻 CODE | Graceful shutdown, readiness vs liveness-проверки, лимиты ресурсов контейнеров |
+| F1.05 | 🖥️ TERM | Аудит доступа: ротация SSH-ключей, токенов, `SESSION_SECRET` — по документированной процедуре (`09` §8) |
+
+## F2 · Родители (роль `parent`)
+| № | Кто | Задача |
+|---|---|---|
+| F2.01 | 💻 CODE | Документация: что видит родитель (расписание, результаты; **не** цены/заметки?), аутентификация, уведомления, согласия — утвердить с владельцем |
+| F2.02 | 💻 CODE | Миграция: роль `parent`, использование `guardians.user_id`, связь «родитель ↔ ученики» |
+| F2.03 | 💻 CODE | `ParentService`, отдельные схемы ответов (read-only), приглашение родителя |
+| F2.04 | 💻 CODE | Бот: меню родителя, уведомления (по настройкам); Web: экран родителя |
+| F2.05 | 💻 CODE | Расширение теста «нет утечек» на роль `parent` |
+| F2.06 | 🖥️ TERM | Смоук на staging, откат при дефектах |
+
+## F3 · Второй мессенджер (MAX)
+| № | Кто | Задача |
+|---|---|---|
+| F3.01 | 💻 CODE | Исследование API мессенджера, ADR: модель `user_identities` вместо единственного `telegram_id`, миграция данных |
+| F3.02 | 💻 CODE | Реализация `Notifier` для MAX, адаптер входа, маппинг команд |
+| F3.03 | 💻 CODE | Тесты: сервисы и фронтенд не изменяются (критерий архитектуры `03`) |
+| F3.04 | 🖥️ TERM | Регистрация бота, webhook, staging-смоук; 👤 OWNER — тест на устройстве |
+
+## F4 · Расширение набора экзаменов и ежегодное обновление шкал
+| № | Кто | Задача |
+|---|---|---|
+| F4.01 | 💻 CODE | Новые `exam_types` (ЕГЭ математика база, русский, физика и др.) — только данные + сиды (без изменений кода сервисов) |
+| F4.02 | 💻 CODE | `scripts/update_grade_scales.py` — загрузка шкалы нового года из проверенного файла, валидация полноты (0…max), dry-run |
+| F4.03 | 👤 OWNER | Ежегодно в мае–июне: сверка новых шкал и `max_primary` с официальными источниками |
+| F4.04 | 🖥️ TERM | Применение на staging → смоук → prod; напоминание в календаре |
+
+## F5 · Несколько преподавателей (изоляция по `teacher_id`)
+| № | Кто | Задача |
+|---|---|---|
+| F5.01 | 💻 CODE | Документация: правила видимости (кто видит каких учеников), роли, финансы по преподавателю |
+| F5.02 | 💻 CODE | Фильтр по `teacher_id` в репозиториях, проверка прав в сервисах |
+| F5.03 | 💻 CODE | Тесты изоляции: преподаватель A не видит учеников преподавателя B (включая файлы, пробники, финансы) |
+| F5.04 | 🖥️ TERM | Миграция существующих данных, staging-смоук |
+
+## F6 · Шаблоны ДЗ и банк заданий
+| № | Кто | Задача |
+|---|---|---|
+| F6.01 | 💻 CODE | Документация и схема: шаблон ДЗ, теги/темы, повторное использование |
+| F6.02 | 💻 CODE | Сервис, API, экран «Банк заданий», выдача из шаблона |
+| F6.03 | 🖥️ TERM | Миграция и смоук |
+
+## F7 · Календарная выгрузка (iCal)
+| № | Кто | Задача |
+|---|---|---|
+| F7.01 | 💻 CODE | Подписываемая ссылка на календарь (длинный случайный токен в хэше, отзыв, TTL), формат iCal с часовыми поясами |
+| F7.02 | 💻 CODE | Тесты безопасности: токен не угадывается, чужие уроки недоступны, отзыв работает |
+| F7.03 | 🖥️ TERM | Проверка импорта в популярные календари (Google/Apple/Яндекс) на реальных устройствах |
+
+## F8 · Автогенерация ссылок Телемоста
+| № | Кто | Задача |
+|---|---|---|
+| F8.01 | 💻 CODE | Исследование API Яндекс Телемоста, ADR (ограничения, ключи, платность) |
+| F8.02 | 💻 CODE | Интеграция через `ExternalServiceError`, фича-флаг, откат на ручные ссылки |
+| F8.03 | 🖥️ TERM | Настройка ключей на сервере, смоук |
+
+## F9 · UX и производительность
+| № | Кто | Задача |
+|---|---|---|
+| F9.01 | 💻 CODE | Готовая библиотека календаря вместо собственной сетки (при необходимости) |
+| F9.02 | 💻 CODE | Расширенные Playwright-сценарии (все роли, групповые уроки, DST) |
+| F9.03 | 🖥️ TERM | Аудит доступности (контраст, клавиатура, `prefers-reduced-motion`), Lighthouse в CI |
+| F9.04 | 💻 CODE | Оптимизация размера бандла, кеширование запросов TanStack Query, оффлайн-состояния |
+
+## F10 · Юридическое и жизненный цикл данных
+| № | Кто | Задача |
+|---|---|---|
+| F10.01 | 👤 OWNER | Подготовка политики обработки ПДн, форм согласия, уведомления РКН (при необходимости) |
+| F10.02 | 💻 CODE | Показ политики/согласия в боте при первом входе, фиксация согласия (дата, версия) |
+| F10.03 | 💻 CODE | Админ-функции: выгрузка и удаление данных ученика по запросу (с аудитом), задача очистки по срокам хранения |
+| F10.04 | 🖥️ TERM | Проверка, что удалённые данные исчезают из БД и S3; срок жизни бэкапов соответствует политике |
+
+## F11 · Устойчивость к недоступности Telegram
+| № | Кто | Задача |
+|---|---|---|
+| F11.01 | 💻 CODE | Мониторинг длины очереди `notifications`, возраста самого старого `pending`, алерт при задержке |
+| F11.02 | 🖥️ TERM | Автопроверка доступности `api.telegram.org` с сервера; переключатель прокси (`TELEGRAM_PROXY_URL`) по runbook |
+| F11.03 | 💻 CODE | Документированный запасной путь: вход в браузере по `/web` и просмотр данных без Telegram-клиента (уже заложено) — проверить сценарий E2E |
+| F11.04 | 🖥️ TERM | Учения: имитация недоступности Telegram, проверка накопления и последующей доставки уведомлений |
+
+## F12 · Расширение тестов
+| № | Кто | Задача |
+|---|---|---|
+| F12.01 | 💻 CODE | Тесты репозиториев (сложные выборки), API-сценарии, сценарии бота |
+| F12.02 | 💻 CODE | Целевое покрытие `src/services` (значение договорить с владельцем), порог в CI |
+| F12.03 | 🖥️ TERM | Нагрузочный смоук (100 учеников, пики напоминаний) и отчёт |
+
+---
+
+# Приложения
+
+## Приложение A. Шаблон промпта для запуска задачи
+
+### Для 💻 CODE-AGENT
+```text
+Роль: ты CODE-AGENT проекта MY_LMS. Прочитай целиком QWEN.md и docs/00..12.
+Задача: <ID и название из docs/IMPLEMENTATION_PLAN.md>.
+Ветка уже создана: <имя ветки> (от актуального origin/main).
+Выполни ТОЛЬКО эту задачу. Не начинай следующую. Не добавляй зависимости, не меняй стек.
+Если документы противоречат друг другу или чего-то не хватает — остановись и задай вопрос.
+Обязательно: тесты на новую логику, негативные кейсы, обновление docs при смене контракта.
+Не запускай деплой, не трогай боевые данные и секреты.
+В конце выдай отчёт в формате из приложения B.
+```
+
+### Для 🖥️ TERM-AGENT
+```text
+Роль: ты TERM-AGENT проекта MY_LMS. Читай QWEN.md (разделы про git, секреты, проверки).
+Задача: <ID и название из docs/IMPLEMENTATION_PLAN.md>.
+Ты выполняешь команды в терминале, git/gh, Docker, БД, деплой и проверки.
+Код бизнес-логики ты НЕ правишь: если проверка красная — верни лог CODE-AGENT и остановись.
+Секреты никогда не выводи в консоль/логи/PR, не коммить .env*.
+Перед опасными командами (rm -rf, drop, force-push, правки прод-БД, остановка сервисов) — запроси подтверждение владельца.
+В конце выдай отчёт: что выполнено, команды, вывод ключевых проверок, найденные проблемы.
+```
+
+## Приложение B. Формат отчёта и Definition of Done
+
+**Отчёт CODE-AGENT после задачи:**
+```text
+Задача: <ID>
+Что сделано: <1–3 предложения простыми словами>
+Файлы: <список созданных/изменённых и зачем>
+Тесты: <какие добавлены; какие негативные кейсы покрыты>
+Проверки: ruff / format / mypy --strict / pytest / pnpm lint / typecheck / test / build — результат
+Миграция: <есть/нет; upgrade/downgrade проверены>
+Контракт API: <менялся ли; обновлён ли 08 и schema.d.ts>
+Вопросы к владельцу: <если есть>
+Следующая задача НЕ выполнялась.
+```
+
+**DoD (сокращённо из `06` часть E):**
+- [ ] Бэкенд: `ruff check`, `ruff format --check`, `mypy --strict`, `pytest` зелёные
+- [ ] Фронтенд: `pnpm lint`, `typecheck`, `test`, `build` зелёные, `schema.d.ts` актуален
+- [ ] Миграция создана, применяется и откатывается
+- [ ] Нет секретов в коде; `.env.example` обновлены
+- [ ] Права проверены на сервере и покрыты тестом (включая негативные)
+- [ ] Схемы ответов ученика/менеджера без приватных полей
+- [ ] Тексты в `texts.py` / `texts.ts`
+- [ ] Состояния интерфейса: загрузка, ошибка, пусто, отправка
+- [ ] Нет блокирующего I/O и N+1
+- [ ] Документация обновлена при изменении правил/данных/эндпоинтов
+- [ ] Реализовано только описанное в документации
+
+## Приложение C. Распределение работ (сводка)
+
+| Тип работы | Исполнитель |
+|---|---|
+| Python, SQLAlchemy, Alembic-файлы, Pydantic, FastAPI, Aiogram, TaskIQ | 💻 CODE |
+| React/TypeScript, стили, тексты, фронтенд-тесты | 💻 CODE |
+| Dockerfile, compose, nginx-конфиги, CI/CD-файлы, скрипты (`backup.sh`…) — **написание** | 💻 CODE |
+| Установка инструментов, `uv lock`, `pnpm install`, запуск проверок | 🖥️ TERM |
+| Git: ветки, коммиты, push, PR, метки, защита `main` | 🖥️ TERM |
+| Docker/compose: запуск, логи, сборка образов | 🖥️ TERM |
+| Применение миграций, проверка ограничений, SQL-сверки | 🖥️ TERM |
+| MinIO/S3, бакеты, права, presigned-проверки | 🖥️ TERM |
+| VPS, SSH, ufw, fail2ban, DNS, SSL, деплой, бэкапы, мониторинг — **выполнение** | 🖥️ TERM |
+| E2E-прогон, нагрузка, аудиты безопасности | 🖥️ TERM |
+| BotFather, оплата VPS/домена, тест на телефонах, решения, юридические вопросы | 👤 OWNER |
+
+## Приложение D. Основные риски и меры
+
+| Риск | Мера в плане |
+|---|---|
+| Ограничения доступа к Telegram из РФ | S1.17 (проверка с сервера, прокси), F11, веб-вход по `/web`, outbox накапливает уведомления |
+| Cookie блокируются в WebView Telegram | S1.18 — тест на устройствах ещё на этапе 1; запасной вариант S1.19 |
+| Агенты «додумывают» функционал | Жёсткие правила (раздел 2.3), один коммит на задачу, отчёт с явным «следующая задача не выполнялась» |
+| Рассинхронизация фронтенда и бэкенда | `gen:api` + проверка дрейфа в CI (S0.17, S2.09) |
+| Ошибки времени/DST | S3.01, S3.04, тесты `time-machine`, хранение UTC |
+| Устаревшие/неверные шкалы экзаменов | Шкалы в БД, S1.04, S6.05, F4.02–F4.04 |
+| Утечка приватных данных ученику/менеджеру | S2.01 — автотест схем на каждый PR |
+| Потеря данных | S9.03–S9.04 + ежемесячная проверка восстановления |
+| Недостаток опыта владельца с TypeScript | Подробные комментарии на русском (`06` B6), малые шаги, отчёты простыми словами |
+| Агент зациклился на красных проверках | Лимит 3 итерации, затем эскалация к владельцу |
+| ПДн несовершеннолетних | S9.09, F10 — до широкого запуска |
+
+## Приложение E. Условия остановки агента (stop conditions)
+
+Агент немедленно останавливается и сообщает владельцу, если:
+1. Документы противоречат друг другу или задача требует решения, которого нет в `docs/`.
+2. Нужно добавить зависимость, сменить стек или архитектуру.
+3. Для продолжения нужен секрет, доступ или оплата.
+4. Команда необратима (удаление данных, force-push, правка прод-БД).
+5. После 3 итераций проверки остаются красными.
+6. Задача потребует изменения более чем одного «независимого» модуля (нужно разбить).
+7. Обнаружена уязвимость или утечка секрета (немедленно — отзыв секрета и инцидент по `09` §8).
+
+---
+
+*Конец документа. Рекомендуемый путь: сохранить файл как `docs/IMPLEMENTATION_PLAN.md` (задача S0.05) и запускать агентов по одной задаче, начиная с S0.01.*
