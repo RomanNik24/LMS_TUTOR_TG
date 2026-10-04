@@ -1,16 +1,16 @@
 """Student service: profiles, invitations."""
 
-from typing import Optional
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.user import UserRepository, StudentProfileRepository
+from src.core.enums import UserRole
+from src.core.exceptions import NotFoundError, PermissionDeniedError
+from src.db.models.users import StudentSubject, User
 from src.repositories.reference import SubjectRepository
 from src.repositories.service import AuditLogRepository
+from src.repositories.user import StudentProfileRepository, UserRepository
 from src.services.auth import AuthService
-from src.core.exceptions import NotFoundError, PermissionDeniedError, BusinessRuleError
-from src.core.enums import UserRole
-from src.db.models.users import User, StudentProfile, StudentSubject
-from src.db.models.reference import Subject
 
 
 class StudentService:
@@ -26,14 +26,14 @@ class StudentService:
         self,
         actor: User,
         display_name: str,
-        school_class: Optional[int],
+        school_class: int | None,
         subject_ids: list[int],
         timezone: str,
-        video_url: Optional[str],
-        board_url: Optional[str],
-        teacher_notes: Optional[str],
+        video_url: str | None,
+        board_url: str | None,
+        teacher_notes: str | None,
         lesson_price: int,
-        parent_contact: Optional[str],
+        parent_contact: str | None,
     ) -> User:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
             raise PermissionDeniedError("create_student")
@@ -50,7 +50,7 @@ class StudentService:
             timezone=timezone,
             is_active=True,
         )
-        profile = await self.profiles.create(
+        profile = await self.profiles.create(  # noqa: F841  # TODO: профиль используется далее на этапе auth
             user_id=user.id,
             teacher_id=actor.id,
             school_class=school_class,

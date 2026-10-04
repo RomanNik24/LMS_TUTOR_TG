@@ -1,14 +1,14 @@
 """SQLAlchemy models for schedule."""
 
-import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Integer,
@@ -17,10 +17,17 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.db.session import Base
 from src.core.enums import LessonStatus
+from src.db.session import Base
+
+if TYPE_CHECKING:
+    from src.db.models.homework import Homework
+    from src.db.models.users import User
 
 
 class ScheduleTemplate(Base):

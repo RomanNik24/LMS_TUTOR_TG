@@ -1,14 +1,15 @@
 """Staff service: manage employees."""
 
-from typing: Optional
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.user import UserRepository
-from src.repositories.service import AuditLogRepository
-from src.services.auth import AuthService
-from src.core.exceptions import NotFoundError, PermissionDeniedError
 from src.core.enums import UserRole
+from src.core.exceptions import NotFoundError, PermissionDeniedError
 from src.db.models.users import User
+from src.repositories.service import AuditLogRepository
+from src.repositories.user import UserRepository
+from src.services.auth import AuthService
 
 
 class StaffService:
@@ -18,7 +19,7 @@ class StaffService:
         self.auth = AuthService(session)
         self.audit = AuditLogRepository(session)
 
-    async def create_staff(self, actor: User, display_name: str, role: UserRole, telegram_id: Optional[int] = None) -> User:
+    async def create_staff(self, actor: User, display_name: str, role: UserRole, telegram_id: int | None = None) -> User:
         if actor.role != UserRole.OWNER:
             raise PermissionDeniedError("create_staff")
         if role not in (UserRole.OWNER, UserRole.MANAGER):
@@ -40,7 +41,7 @@ class StaffService:
         await self.session.commit()
         return user
 
-    async def update_staff(self, actor: User, staff_id: int, display_name: Optional[str], role: Optional[UserRole]) -> User:
+    async def update_staff(self, actor: User, staff_id: int, display_name: str | None, role: UserRole | None) -> User:
         if actor.role != UserRole.OWNER:
             raise PermissionDeniedError("update_staff")
         if role == UserRole.OWNER:

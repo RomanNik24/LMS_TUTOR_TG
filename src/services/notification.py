@@ -1,15 +1,15 @@
 """Notification service: outbox pattern."""
 
 from datetime import datetime
-from typing: Optional
-from sqlalchemy import select
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.enums import NotificationStatus
+from src.core.timeutils import utc_now
+from src.db.models.service import Notification
+from src.db.models.users import User
 from src.repositories.service import NotificationRepository
 from src.repositories.user import UserRepository
-from src.core.enums import NotificationStatus
-from src.db.models.service import Notification
-from src.core.timeutils import utc_now
 
 
 class NotificationService:
@@ -25,7 +25,7 @@ class NotificationService:
         payload: dict,
         dedup_key: str,
         is_urgent: bool = False,
-        scheduled_for: Optional[datetime] = None,
+        scheduled_for: datetime | None = None,
     ) -> Notification:
         """Add notification to outbox."""
         if scheduled_for is None:

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from src.api.v1 import auth, reference, student, admin, files
+from src.api.v1 import admin, auth, files, reference, student
 
 router = APIRouter()
 

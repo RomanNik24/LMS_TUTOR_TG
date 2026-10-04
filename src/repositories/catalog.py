@@ -3,8 +3,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories import BaseRepository
 from src.db.models.reference import CatalogItem
+from src.repositories import BaseRepository
 
 
 class CatalogRepository(BaseRepository[CatalogItem]):
@@ -12,7 +12,7 @@ class CatalogRepository(BaseRepository[CatalogItem]):
         super().__init__(session, CatalogItem)
 
     async def get_published(self) -> list[CatalogItem]:
-        stmt = select(CatalogItem).where(CatalogItem.is_published == True).order_by(CatalogItem.sort_order)
+        stmt = select(CatalogItem).where(CatalogItem.is_published).order_by(CatalogItem.sort_order)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

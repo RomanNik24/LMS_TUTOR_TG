@@ -1,6 +1,16 @@
 """SQLAlchemy models for reference tables."""
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.session import Base
@@ -25,7 +35,7 @@ class ExamType(Base):
     result_kind: Mapped[str] = mapped_column(String(20), nullable=False)  # grade_2_5, test_100
     max_primary: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    config: Mapped[dict] = mapped_column(default={}, nullable=False)
+    config: Mapped[dict] = mapped_column(JSON, default={}, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     subject: Mapped["Subject"] = relationship()

@@ -1,13 +1,12 @@
 """Homework repository."""
 
-from typing import Optional
-from datetime import datetime
-from sqlalchemy import select, and_, or_
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories import BaseRepository
-from src.db.models.homework import Homework, HomeworkMaterial, HomeworkAssignment, HomeworkExtension, HomeworkFile
 from src.core.enums import HomeworkStatus
+from src.db.models.homework import Homework, HomeworkAssignment, HomeworkFile
+from src.repositories import BaseRepository
 
 
 class HomeworkRepository(BaseRepository[Homework]):
@@ -27,7 +26,7 @@ class HomeworkAssignmentRepository(BaseRepository[HomeworkAssignment]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_for_student(self, student_id: int, status: Optional[HomeworkStatus] = None) -> list[HomeworkAssignment]:
+    async def get_for_student(self, student_id: int, status: HomeworkStatus | None = None) -> list[HomeworkAssignment]:
         stmt = select(HomeworkAssignment).where(HomeworkAssignment.student_id == student_id)
         if status:
             stmt = stmt.where(HomeworkAssignment.status == status)

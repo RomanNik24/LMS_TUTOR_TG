@@ -1,20 +1,19 @@
 """Stats service: dashboard, earnings, reports."""
 
-from datetime import datetime, timedelta
-from typing: Optional
-from sqlalchemy import select, func, and_
+from datetime import datetime
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.schedule import LessonRepository, LessonParticipantRepository
-from src.repositories.homework import HomeworkAssignmentRepository
-from src.repositories.user import UserRepository
-from src.repositories.exam import MockExamResultRepository
-from src.core.enums import UserRole, LessonStatus, HomeworkStatus
+from src.core.enums import HomeworkStatus, LessonStatus, UserRole
+from src.core.exceptions import NotFoundError, PermissionDeniedError
+from src.core.timeutils import end_of_day, start_of_day, utc_now
 from src.db.models.schedule import Lesson, LessonParticipant
-from src.db.models.homework import HomeworkAssignment
-from src.db.models.exam import MockExamResult
-from src.db.models.users import User
-from src.core.timeutils import utc_now, start_of_day, end_of_day, local_date_str
+from src.db.models.users import StudentProfile, User
+from src.repositories.exam import MockExamResultRepository
+from src.repositories.homework import HomeworkAssignmentRepository
+from src.repositories.schedule import LessonParticipantRepository, LessonRepository
+from src.repositories.user import UserRepository
 
 
 class StatsService:
@@ -55,7 +54,7 @@ class StatsService:
         earned_month = 0
         expected_month = 0
         if actor.role == UserRole.OWNER:
-            month_start = start_of_day(now.replace(day=1), actor.timezone)
+            month_start = start_of_day(now.replace(day=1), actor.timezone)  # noqa: F841  # TODO: расчёт заработка
             # Earned: completed billable lessons this month
             # Expected: scheduled lessons this month at current prices
 
@@ -82,7 +81,7 @@ class StatsService:
 
         # Earned: sum of price_snapshot for completed billable lessons
         stmt = select(func.sum(LessonParticipant.price_snapshot)).join(Lesson).where(
-            LessonParticipant.is_billable == True,
+            LessonParticipant.is_billable,
             LessonParticipant.price_snapshot.is_not(None),
             Lesson.status.in_([LessonStatus.COMPLETED, LessonStatus.CANCELLED]),
             Lesson.start_at >= from_dt,
@@ -113,7 +112,7 @@ class StatsService:
 
         # Homework stats
         assignments = await self.assignments.get_for_student(student_id)
-        filtered = [a for a in assignments if from_dt <= (a.graded_at or utc_now()) < to_dt and a.status == HomeworkStatus.GRADED]
+        filtered = [a for a in assignments if from_dt <= (a.graded_at or utc_now()) < to_dt and a.status == HomeworkStatus.GRADED]  # noqa: F841  # TODO: недельная статистика
 
         # Weekly average percentage
         weekly_avg = {}

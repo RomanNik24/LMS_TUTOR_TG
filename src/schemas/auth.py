@@ -1,8 +1,8 @@
 """Pydantic schemas for auth."""
 
 from datetime import datetime
-from typing: Optional
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel
 
 
 class TelegramAuthRequest(BaseModel):

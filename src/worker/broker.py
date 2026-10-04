@@ -2,7 +2,6 @@
 
 from taskiq import TaskiqScheduler
 from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
-from taskiq_aio_pika import AioPikaBroker
 
 from src.core.config import settings
 

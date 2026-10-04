@@ -1,7 +1,7 @@
 """Pydantic schemas for homework."""
 
 from datetime import datetime
-from typing: Optional, List
+
 from pydantic import BaseModel, Field
 
 
@@ -19,28 +19,28 @@ class HomeworkMaterialResponse(BaseModel):
 class HomeworkCreateRequest(BaseModel):
     kind: str  # regular, mock_exam
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     max_score: int = Field(..., gt=0)
     subject_id: int
-    exam_type_id: Optional[int] = None
-    lesson_id: Optional[int] = None
+    exam_type_id: int | None = None
+    lesson_id: int | None = None
     due_mode: str = Field(..., pattern="^(next_lesson|fixed)$")
-    due_at: Optional[datetime] = None
-    student_ids: List[int] = []
+    due_at: datetime | None = None
+    student_ids: list[int] = []
 
 
 class HomeworkResponse(BaseModel):
     id: int
     created_by: int
-    lesson_id: Optional[int]
+    lesson_id: int | None
     subject_id: int
     kind: str
-    exam_type_id: Optional[int]
+    exam_type_id: int | None
     title: str
-    description: Optional[str]
+    description: str | None
     max_score: int
     due_mode: str
-    materials: List[HomeworkMaterialResponse] = []
+    materials: list[HomeworkMaterialResponse] = []
 
     class Config:
         from_attributes = True
@@ -54,33 +54,33 @@ class HomeworkAssignmentResponse(BaseModel):
     original_due_at: datetime
     due_at: datetime
     extensions_count: int
-    submission_type: Optional[str]
-    submitted_at: Optional[datetime]
-    score: Optional[int]
-    graded_at: Optional[datetime]
-    graded_by: Optional[int]
+    submission_type: str | None
+    submitted_at: datetime | None
+    score: int | None
+    graded_at: datetime | None
+    graded_by: int | None
     graded_after_expiry: bool
-    teacher_comment: Optional[str]
-    student_comment: Optional[str]
-    expired_at: Optional[datetime]
+    teacher_comment: str | None
+    student_comment: str | None
+    expired_at: datetime | None
 
     class Config:
         from_attributes = True
 
 
 class AssignmentSubmitRequest(BaseModel):
-    student_comment: Optional[str] = None
+    student_comment: str | None = None
 
 
 class AssignmentGradeRequest(BaseModel):
     score: int = Field(..., ge=0)
-    comment: Optional[str] = None
+    comment: str | None = None
 
 
 class AssignmentReturnRequest(BaseModel):
     comment: str
-    new_due_at: Optional[datetime] = None
+    new_due_at: datetime | None = None
 
 
 class AssignmentExtendRequest(BaseModel):
-    due_at: Optional[datetime] = None
+    due_at: datetime | None = None

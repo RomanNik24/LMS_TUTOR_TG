@@ -2,6 +2,7 @@
 
 import logging
 import sys
+
 from pythonjsonlogger import jsonlogger
 
 from src.core.config import settings

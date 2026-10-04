@@ -1,20 +1,26 @@
 """Bot handlers."""
 
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 
 from src.bot.keyboards import (
-    get_guest_keyboard, get_student_keyboard, get_staff_keyboard,
-    get_catalog_keyboard, get_confirm_keyboard,
+    get_catalog_keyboard,
+    get_confirm_keyboard,
+    get_guest_keyboard,
+    get_staff_keyboard,
+    get_student_keyboard,
 )
-from src.bot.states import ConfirmRelinkState, LogoutState
+from src.bot.states import LogoutState
 from src.core.texts import (
-    GUEST_WELCOME, CATALOG_EMPTY, student_welcome,
-    BOT_COMMANDS_GUEST, BOT_COMMANDS_STUDENT, BOT_COMMANDS_STAFF,
+    BOT_COMMANDS_GUEST,
+    BOT_COMMANDS_STAFF,
+    BOT_COMMANDS_STUDENT,
+    CATALOG_EMPTY,
+    GUEST_WELCOME,
+    student_welcome,
 )
-
 
 router = Router()
 
@@ -42,7 +48,7 @@ async def show_catalog(message: Message):
 @router.callback_query(F.data.startswith("catalog_"))
 async def catalog_page(callback: CallbackQuery):
     """Handle catalog pagination."""
-    page = int(callback.data.split("_")[1])
+    page = int(callback.data.split("_")[1])  # noqa: F841  # TODO: использовать на этапе каталога
     # TODO: Fetch and show catalog page
     await callback.answer()
 

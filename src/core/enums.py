@@ -1,33 +1,33 @@
 """Enumeration types."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     OWNER = "owner"
     MANAGER = "manager"
     STUDENT = "student"
 
 
-class LessonStatus(str, Enum):
+class LessonStatus(StrEnum):
     SCHEDULED = "scheduled"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
 
 
-class AttendanceStatus(str, Enum):
+class AttendanceStatus(StrEnum):
     PENDING = "pending"
     ATTENDED = "attended"
     NO_SHOW = "no_show"
     CANCELLED = "cancelled"
 
 
-class HomeworkKind(str, Enum):
+class HomeworkKind(StrEnum):
     REGULAR = "regular"
     MOCK_EXAM = "mock_exam"
 
 
-class HomeworkStatus(str, Enum):
+class HomeworkStatus(StrEnum):
     ASSIGNED = "assigned"
     SUBMITTED = "submitted"
     NEEDS_REVISION = "needs_revision"
@@ -35,29 +35,29 @@ class HomeworkStatus(str, Enum):
     EXPIRED = "expired"
 
 
-class ExamKind(str, Enum):
+class ExamKind(StrEnum):
     OGE = "oge"
     EGE = "ege"
 
 
-class ExamResultKind(str, Enum):
+class ExamResultKind(StrEnum):
     GRADE_2_5 = "grade_2_5"
     TEST_100 = "test_100"
 
 
-class NotificationStatus(str, Enum):
+class NotificationStatus(StrEnum):
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
     SKIPPED = "skipped"
 
 
-class AuthTokenPurpose(str, Enum):
+class AuthTokenPurpose(StrEnum):
     INVITE = "invite"
     WEB_LOGIN = "web_login"
 
 
-class FileRole(str, Enum):
+class FileRole(StrEnum):
     STUDENT_SOLUTION = "student_solution"
     TEACHER_REVIEW = "teacher_review"
     HOMEWORK_MATERIAL = "homework_material"

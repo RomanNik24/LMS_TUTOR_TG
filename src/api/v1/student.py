@@ -1,22 +1,20 @@
 """Student API endpoints."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import get_session
-from src.schemas.schedule import LessonResponse
-from src.schemas.homework import HomeworkAssignmentResponse
-from src.schemas.exam import MockExamResultResponse
 
 router = APIRouter()
 
 
 @router.get("/student/lessons")
 async def get_student_lessons(
-    from_date: str = Query(..., alias="from"),
-    to_date: str = Query(..., alias="to"),
-    session: AsyncSession = Depends(get_session),
-):
+    session: Annotated[AsyncSession, Depends(get_session)],
+    from_date: Annotated[str, Query(..., alias="from")],
+    to_date: Annotated[str, Query(..., alias="to")]):
     """Get student lessons for period."""
     # TODO: Implement with auth
     return {"items": [], "total": 0, "limit": 50, "offset": 0}
@@ -25,7 +23,7 @@ async def get_student_lessons(
 @router.get("/student/lessons/{lesson_id}")
 async def get_student_lesson(
     lesson_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Get lesson details with links."""
     # TODO: Implement
@@ -34,11 +32,10 @@ async def get_student_lesson(
 
 @router.get("/student/homework")
 async def get_student_homework(
+    session: Annotated[AsyncSession, Depends(get_session)],
     status: str = "active",
     limit: int = 50,
-    offset: int = 0,
-    session: AsyncSession = Depends(get_session),
-):
+    offset: int = 0):
     """Get student homework assignments."""
     # TODO: Implement
     return {"items": [], "total": 0, "limit": limit, "offset": offset}
@@ -47,7 +44,7 @@ async def get_student_homework(
 @router.get("/student/homework/{assignment_id}")
 async def get_student_assignment(
     assignment_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Get assignment details."""
     # TODO: Implement
@@ -57,7 +54,7 @@ async def get_student_assignment(
 @router.post("/student/homework/{assignment_id}/files")
 async def upload_solution_file(
     assignment_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Upload solution file."""
     # TODO: Implement multipart upload
@@ -68,7 +65,7 @@ async def upload_solution_file(
 async def delete_solution_file(
     assignment_id: int,
     file_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Delete own solution file."""
     raise NotImplementedError
@@ -77,7 +74,7 @@ async def delete_solution_file(
 @router.post("/student/homework/{assignment_id}/submit")
 async def submit_assignment(
     assignment_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Submit assignment after file upload."""
     raise NotImplementedError
@@ -86,7 +83,7 @@ async def submit_assignment(
 @router.post("/student/homework/{assignment_id}/self-report")
 async def self_report_assignment(
     assignment_id: int,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Mark assignment as done without files."""
     raise NotImplementedError
@@ -94,9 +91,8 @@ async def self_report_assignment(
 
 @router.get("/student/reports")
 async def get_student_reports(
-    from_date: str = Query(..., alias="from"),
-    to_date: str = Query(..., alias="to"),
-    session: AsyncSession = Depends(get_session),
-):
+    session: Annotated[AsyncSession, Depends(get_session)],
+    from_date: Annotated[str, Query(..., alias="from")],
+    to_date: Annotated[str, Query(..., alias="to")]):
     """Get report data for charts."""
     raise NotImplementedError

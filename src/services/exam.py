@@ -1,18 +1,17 @@
 """Exam service: mock exams, score conversion."""
 
 from datetime import date
-from typing import Optional
-from sqlalchemy import select
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.exam import MockExamResultRepository, ExamTypeRepository, GradeScaleRepository
+from src.core.exceptions import NotFoundError
+from src.db.models.exam import MockExamResult
+from src.db.models.homework import Homework, HomeworkAssignment
+from src.db.models.reference import ExamType
+from src.db.models.users import User
+from src.repositories.exam import ExamTypeRepository, GradeScaleRepository, MockExamResultRepository
 from src.repositories.homework import HomeworkAssignmentRepository
 from src.repositories.service import AuditLogRepository
-from src.core.exceptions import NotFoundError, BusinessRuleError
-from src.db.models.exam import MockExamResult
-from src.db.models.reference import ExamType, GradeScale
-from src.db.models.homework import HomeworkAssignment
-from src.core.enums import ExamResultKind
 
 
 class ExamService:
@@ -24,7 +23,7 @@ class ExamService:
         self.assignments = HomeworkAssignmentRepository(session)
         self.audit = AuditLogRepository(session)
 
-    def convert_score(self, exam_type: ExamType, primary_score: int, max_primary: int, geometry_score: Optional[int] = None) -> tuple[int | None, int | None]:
+    def convert_score(self, exam_type: ExamType, primary_score: int, max_primary: int, geometry_score: int | None = None) -> tuple[int | None, int | None]:
         """
         Convert primary score to result value.
         Returns (converted_value, scale_year) or (None, None) if not applicable.
@@ -61,9 +60,9 @@ class ExamService:
         exam_date: date,
         primary_score: int,
         max_primary: int,
-        geometry_score: Optional[int] = None,
-        assignment_id: Optional[int] = None,
-        comment: Optional[str] = None,
+        geometry_score: int | None = None,
+        assignment_id: int | None = None,
+        comment: str | None = None,
     ) -> MockExamResult:
         exam_type = await self.exam_types.get(exam_type_id)
         if not exam_type:
@@ -103,18 +102,18 @@ class ExamService:
     async def create_from_homework(self, homework: "Homework", assignment: HomeworkAssignment) -> MockExamResult:
         """Create exam result from graded mock exam homework."""
         if homework.kind != "mock_exam" or not homework.exam_type_id:
-            return
+            return None
 
         if assignment.score is None:
-            return
+            return None
 
         exam_type = await self.exam_types.get(homework.exam_type_id)
         if not exam_type:
-            return
+            return None
 
         converted, scale_year = self.convert_score(exam_type, assignment.score, homework.max_primary)
 
-        result = await self.results.create(
+        return await self.results.create(
             student_id=assignment.student_id,
             exam_type_id=homework.exam_type_id,
             exam_date=assignment.graded_at.date() if assignment.graded_at else date.today(),
@@ -125,4 +124,3 @@ class ExamService:
             assignment_id=assignment.id,
             created_by=assignment.graded_by or 0,
         )
-        return result

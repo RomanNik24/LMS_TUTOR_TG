@@ -1,7 +1,7 @@
 """Pydantic schemas for schedule."""
 
-from datetime import datetime, date, time
-from typing: Optional, List
+from datetime import date, datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -13,19 +13,19 @@ class ScheduleTemplateCreateRequest(BaseModel):
     duration_minutes: int = Field(60, gt=0)
     timezone: str
     starts_on: date
-    ends_on: Optional[date] = None
-    student_ids: List[int] = []
+    ends_on: date | None = None
+    student_ids: list[int] = []
 
 
 class ScheduleTemplateUpdateRequest(BaseModel):
-    weekday: Optional[int] = Field(None, ge=1, le=7)
-    start_local_time: Optional[str] = None
-    duration_minutes: Optional[int] = Field(None, gt=0)
-    timezone: Optional[str] = None
-    starts_on: Optional[date] = None
-    ends_on: Optional[date] = None
-    is_active: Optional[bool] = None
-    student_ids: Optional[List[int]] = None
+    weekday: int | None = Field(None, ge=1, le=7)
+    start_local_time: str | None = None
+    duration_minutes: int | None = Field(None, gt=0)
+    timezone: str | None = None
+    starts_on: date | None = None
+    ends_on: date | None = None
+    is_active: bool | None = None
+    student_ids: list[int] | None = None
 
 
 class ScheduleTemplateResponse(BaseModel):
@@ -37,9 +37,9 @@ class ScheduleTemplateResponse(BaseModel):
     duration_minutes: int
     timezone: str
     starts_on: date
-    ends_on: Optional[date]
+    ends_on: date | None
     is_active: bool
-    generated_until: Optional[date]
+    generated_until: date | None
 
     class Config:
         from_attributes = True
@@ -50,10 +50,10 @@ class LessonCreateRequest(BaseModel):
     teacher_id: int
     start_at: datetime
     end_at: datetime
-    student_ids: List[int]
-    video_url_override: Optional[str] = None
-    board_url_override: Optional[str] = None
-    topic: Optional[str] = None
+    student_ids: list[int]
+    video_url_override: str | None = None
+    board_url_override: str | None = None
+    topic: str | None = None
 
 
 class LessonRescheduleRequest(BaseModel):
@@ -63,18 +63,18 @@ class LessonRescheduleRequest(BaseModel):
 
 class LessonCancelRequest(BaseModel):
     reason: str
-    billable_student_ids: List[int] = []
+    billable_student_ids: list[int] = []
 
 
 class LessonCompleteRequest(BaseModel):
-    attendances: List[dict]  # [{"student_id": int, "attendance": str, "is_billable": bool}]
+    attendances: list[dict]  # [{"student_id": int, "attendance": str, "is_billable": bool}]
 
 
 class LessonParticipantResponse(BaseModel):
     student_id: int
     attendance: str
     is_billable: bool
-    price_snapshot: Optional[int] = None
+    price_snapshot: int | None = None
 
     class Config:
         from_attributes = True
@@ -87,13 +87,13 @@ class LessonResponse(BaseModel):
     start_at: datetime
     end_at: datetime
     status: str
-    template_id: Optional[int]
+    template_id: int | None
     is_detached: bool
-    video_url_override: Optional[str]
-    board_url_override: Optional[str]
-    topic: Optional[str]
-    teacher_note: Optional[str]
-    participants: List[LessonParticipantResponse] = []
+    video_url_override: str | None
+    board_url_override: str | None
+    topic: str | None
+    teacher_note: str | None
+    participants: list[LessonParticipantResponse] = []
 
     class Config:
         from_attributes = True

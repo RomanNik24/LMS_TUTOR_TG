@@ -1,24 +1,54 @@
 """Export all schemas."""
 
-from src.schemas.auth import TelegramAuthRequest, LinkAuthRequest, MeResponse, InvitationCreateResponse
-from src.schemas.user import (
-    SubjectResponse, ExamTypeResponse,
-    StudentCreateRequest, StudentUpdateRequest, StudentResponse, StudentCardOwnerResponse,
-    StaffCreateRequest, StaffUpdateRequest, StaffResponse,
+from src.schemas.auth import (
+    InvitationCreateResponse,
+    LinkAuthRequest,
+    MeResponse,
+    TelegramAuthRequest,
 )
-from src.schemas.schedule import (
-    ScheduleTemplateCreateRequest, ScheduleTemplateUpdateRequest, ScheduleTemplateResponse,
-    LessonCreateRequest, LessonRescheduleRequest, LessonCancelRequest, LessonCompleteRequest,
-    LessonParticipantResponse, LessonResponse,
+from src.schemas.catalog import (
+    CatalogItemCreateRequest,
+    CatalogItemResponse,
+    CatalogItemUpdateRequest,
+)
+from src.schemas.common import ErrorDetail, ErrorResponse, PaginatedResponse
+from src.schemas.exam import (
+    MockExamResultCreateRequest,
+    MockExamResultResponse,
+    MockExamResultUpdateRequest,
 )
 from src.schemas.homework import (
-    HomeworkMaterialResponse, HomeworkCreateRequest, HomeworkResponse,
-    HomeworkAssignmentResponse, AssignmentSubmitRequest, AssignmentGradeRequest,
-    AssignmentReturnRequest, AssignmentExtendRequest,
+    AssignmentExtendRequest,
+    AssignmentGradeRequest,
+    AssignmentReturnRequest,
+    AssignmentSubmitRequest,
+    HomeworkAssignmentResponse,
+    HomeworkCreateRequest,
+    HomeworkMaterialResponse,
+    HomeworkResponse,
 )
-from src.schemas.exam import MockExamResultCreateRequest, MockExamResultUpdateRequest, MockExamResultResponse
-from src.schemas.catalog import CatalogItemCreateRequest, CatalogItemUpdateRequest, CatalogItemResponse
-from src.schemas.common import PaginatedResponse, ErrorDetail, ErrorResponse
+from src.schemas.schedule import (
+    LessonCancelRequest,
+    LessonCompleteRequest,
+    LessonCreateRequest,
+    LessonParticipantResponse,
+    LessonRescheduleRequest,
+    LessonResponse,
+    ScheduleTemplateCreateRequest,
+    ScheduleTemplateResponse,
+    ScheduleTemplateUpdateRequest,
+)
+from src.schemas.user import (
+    ExamTypeResponse,
+    StaffCreateRequest,
+    StaffResponse,
+    StaffUpdateRequest,
+    StudentCardOwnerResponse,
+    StudentCreateRequest,
+    StudentResponse,
+    StudentUpdateRequest,
+    SubjectResponse,
+)
 
 __all__ = [
     "TelegramAuthRequest", "LinkAuthRequest", "MeResponse", "InvitationCreateResponse",

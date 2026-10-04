@@ -1,7 +1,6 @@
 """Bot texts and error messages (Russian)."""
 
-from src.core.enums import LessonStatus, HomeworkStatus, AttendanceStatus
-
+from src.core.enums import AttendanceStatus, HomeworkStatus, LessonStatus
 
 # Bot command descriptions
 BOT_COMMANDS_GUEST = {
