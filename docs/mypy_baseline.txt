@@ -12,6 +12,10 @@
 #       исправляются вместе с приведением pyproject/mypy-конфига (S0.08) и моделей (S0.14+).
 # Плагин gh CLI недоступен (нет remote/auth), поэтому issues зафиксированы здесь.
 # Обновлять файл прогоном: mypy --strict src 2>&1 | grep "error:" > docs/mypy_baseline.txt
+# UPDATE (clean-up pass): worker-модули приведены к taskiq 0.13 API:
+#   - taskiq.schedule.cron_schedule удалён из taskiq -> расписания объявлены списками ScheduledTask-dict ({"cron": ...});
+#   - TaskiqWorker/TaskiqScheduler больше не импортируются (worker/scheduler запускаются CLI `taskiq worker|scheduler`), get_worker/get_scheduler возвращают broker (TODO S0.12);
+#   - снятые из baseline ошибки: import-not-found (taskiq.schedule) и attr-defined в src/worker/* (4 шт., 155->154).
 
 mypy --strict: src/repositories/__init__.py:20: error: Function is missing a type annotation
 mypy --strict: src/repositories/__init__.py:25: error: Function is missing a type annotation
