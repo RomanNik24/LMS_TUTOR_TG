@@ -43,7 +43,7 @@ dependencies = [
     "python-dateutil>=2.8",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -56,20 +56,15 @@ dev = [
 ]
 
 [tool.uv]
-dev-dependencies = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "testcontainers",
-    "time-machine",
-    "ruff",
-    "mypy",
-    "pre-commit",
-]
+# Приложение, а не библиотека: собирать wheel не требуется,
+# поэтому uv не пытается ставить проект в editable-режиме.
+package = false
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+[tool.ruff.lint]
 select = [
     "E", "F", "I", "W", "UP", "B", "C4", "SIM", "T20", "TCH", "PTH",
     "ERA", "PD", "PIE", "PT", "Q", "RET", "RSE", "SLF", "TRY", "NPY",
