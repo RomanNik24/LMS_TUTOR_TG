@@ -1,0 +1,44 @@
+# Секреты и локальное окружение
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.crt
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Прочее
+.git/
+.github/
+.gitignore
+*.md
+docs/
+
+# Фронтенд собирается отдельным образом (frontend/Dockerfile)
+frontend/
+
+# Каталоги, не нужные в контексте сборки
+nginx/
+scripts/
+*.sqlite
+*.db
+*.log
+logs/
+
+# Локальные сборочные артефакты
+dist/
+build/
+*.egg-info/
+.idea/
+.vscode/

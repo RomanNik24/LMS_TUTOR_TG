@@ -1,11 +1,16 @@
 """Application configuration using Pydantic Settings."""
 
+from typing import Any
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # Локально конфигурация лежит в .env.local (см. .env.example и ТЗ).
+        # В prod переменные приходят из окружения контейнера, файлы не нужны.
+        env_file=(".env.local", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -55,6 +60,27 @@ class Settings(BaseSettings):
     # Telegram API (for RU access)
     TELEGRAM_API_BASE: str = "https://api.telegram.org"
     TELEGRAM_PROXY_URL: str = ""
+
+    @model_validator(mode="after")
+    def _require_secrets_in_prod(self) -> "Settings":
+        """В prod запрещено молча стартовать с пустыми секретами."""
+        if self.APP_ENV != "prod":
+            return self
+
+        required: dict[str, Any] = {
+            "BOT_TOKEN": self.BOT_TOKEN,
+            "SESSION_SECRET": self.SESSION_SECRET,
+            "WEBHOOK_SECRET": self.WEBHOOK_SECRET,
+            "S3_ENDPOINT_URL": self.S3_ENDPOINT_URL,
+            "S3_ACCESS_KEY": self.S3_ACCESS_KEY,
+            "S3_SECRET_KEY": self.S3_SECRET_KEY,
+            "S3_BUCKET": self.S3_BUCKET,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            msg = f"APP_ENV=prod: обязательные переменные не заданы: {', '.join(missing)}"
+            raise ValueError(msg)
+        return self
 
 
 settings = Settings()

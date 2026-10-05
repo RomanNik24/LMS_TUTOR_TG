@@ -19,6 +19,9 @@ build/
 .env
 .env.local
 .env.*.local
+# Шаблон без секретов должен быть в репозитории (ТЗ, S0.10).
+# Перекрывает правило `.env.*` из глобального gitignore.
+!.env.example
 
 # IDE
 .vscode/

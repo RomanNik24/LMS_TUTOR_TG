@@ -1,87 +1,134 @@
-version: "3.8"
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_DB: lms
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD обязателен}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    restart: unless-stopped
+    logging: *logging
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD обязателен}
     volumes:
       - redis_data:/data
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  app:
+  # Одноразовая миграция БД перед стартом приложения.
+  migrate:
     image: ${REGISTRY}/lms-app:${TAG}
+    command: alembic upgrade head
+    restart: "no"
+    logging: *logging
     environment:
       - APP_ENV=prod
       - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/lms
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-      - BOT_TOKEN=${BOT_TOKEN}
-      - BOT_MODE=webhook
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
-      - WEBHOOK_PATH_SECRET=${WEBHOOK_PATH_SECRET}
-      - OWNER_TELEGRAM_ID=${OWNER_TELEGRAM_ID}
-      - TEACHER_CONTACT_URL=${TEACHER_CONTACT_URL}
-      - PUBLIC_BASE_URL=https://${DOMAIN}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
-      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
-      - S3_SECRET_KEY=${S3_SECRET_KEY}
-      - S3_BUCKET=${S3_BUCKET}
-      - S3_REGION=${S3_REGION}
-      - S3_PUBLIC_URL=${S3_PUBLIC_URL}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - SCHEDULE_HORIZON_WEEKS=4
-      - DEFAULT_TIMEZONE=Europe/Moscow
-    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  app:
+    image: ${REGISTRY}/lms-app:${TAG}
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      - APP_ENV=prod
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/lms
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - BOT_TOKEN=${BOT_TOKEN:?BOT_TOKEN обязателен}
+      - BOT_MODE=webhook
+      - WEBHOOK_URL=${WEBHOOK_URL:?WEBHOOK_URL обязателен}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:?WEBHOOK_SECRET обязателен}
+      - WEBHOOK_PATH_SECRET=${WEBHOOK_PATH_SECRET:?WEBHOOK_PATH_SECRET обязателен}
+      - OWNER_TELEGRAM_ID=${OWNER_TELEGRAM_ID:?OWNER_TELEGRAM_ID обязателен}
+      - TEACHER_CONTACT_URL=${TEACHER_CONTACT_URL:?TEACHER_CONTACT_URL обязателен}
+      - PUBLIC_BASE_URL=https://${DOMAIN:?DOMAIN обязателен}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET обязателен}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:?S3_ENDPOINT_URL обязателен}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:?S3_ACCESS_KEY обязателен}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:?S3_SECRET_KEY обязателен}
+      - S3_BUCKET=${S3_BUCKET:?S3_BUCKET обязателен}
+      - S3_REGION=${S3_REGION:-ru-1}
+      - S3_PUBLIC_URL=${S3_PUBLIC_URL:?S3_PUBLIC_URL обязателен}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - SCHEDULE_HORIZON_WEEKS=4
+      - DEFAULT_TIMEZONE=${DEFAULT_TIMEZONE:-Europe/Moscow}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   worker:
     image: ${REGISTRY}/lms-app:${TAG}
     command: taskiq worker src.worker.broker:broker
+    restart: unless-stopped
+    logging: *logging
     environment:
       - APP_ENV=prod
       - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/lms
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
 
   scheduler:
     image: ${REGISTRY}/lms-app:${TAG}
     command: taskiq scheduler src.worker.broker:scheduler
+    restart: unless-stopped
+    logging: *logging
     environment:
       - APP_ENV=prod
       - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/lms
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
-    restart: unless-stopped
     depends_on:
-      - postgres
-      - redis
+      migrate:
+        condition: service_completed_successfully
 
   nginx:
     image: ${REGISTRY}/lms-frontend:${TAG}
+    restart: unless-stopped
+    logging: *logging
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-    restart: unless-stopped
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
 volumes:
   postgres_data:

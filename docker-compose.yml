@@ -1,8 +1,7 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_DB: lms
       POSTGRES_USER: postgres
@@ -15,10 +14,11 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
@@ -28,10 +28,11 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -41,11 +42,47 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Одноразовая инициализация бакета lms-files (ТЗ, этап S0.10).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/lms-files &&
+      mc ls local
+      "
+
+  # Одноразовая миграция БД (alembic). Появится после этапа S1.02.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file:
+      - .env.local
+    environment:
+      - APP_ENV=local
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/lms
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.local
     environment:
       - APP_ENV=local
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/lms
@@ -55,8 +92,6 @@ services:
       - S3_SECRET_KEY=minioadmin
       - S3_BUCKET=lms-files
       - S3_REGION=us-east-1
-    env_file:
-      - .env.local
     ports:
       - "8000:8000"
     depends_on:
@@ -64,44 +99,60 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
     volumes:
-      - ./src:/app/src
+      - ./src:/app/src:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
     command: taskiq worker src.worker.broker:broker
+    env_file:
+      - .env.local
     environment:
       - APP_ENV=local
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/lms
       - REDIS_URL=redis://redis:6379/0
-    env_file:
-      - .env.local
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   scheduler:
     build:
       context: .
       dockerfile: Dockerfile
     command: taskiq scheduler src.worker.broker:scheduler
+    env_file:
+      - .env.local
     environment:
       - APP_ENV=local
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/lms
       - REDIS_URL=redis://redis:6379/0
-    env_file:
-      - .env.local
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres_data:
