@@ -1,19 +1,21 @@
 """Homework service: assignments, grading, extensions."""
 
-from datetime import datetime
-from typing import Optional
-from sqlalchemy import select
+from datetime import datetime, timedelta
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.homework import HomeworkRepository, HomeworkAssignmentRepository, HomeworkFileRepository
-from src.repositories.user import UserRepository
-from src.repositories.service import AuditLogRepository
-from src.services.schedule import ScheduleService
-from src.core.exceptions import NotFoundError, PermissionDeniedError, BusinessRuleError
-from src.core.enums import UserRole, HomeworkKind, HomeworkStatus, FileRole
-from src.db.models.homework import Homework, HomeworkAssignment, HomeworkFile, HomeworkExtension
-from src.db.models.users import User
+from src.core.enums import HomeworkKind, HomeworkStatus, UserRole
+from src.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
 from src.core.timeutils import utc_now
+from src.db.models.homework import Homework, HomeworkAssignment, HomeworkExtension
+from src.db.models.users import User
+from src.repositories.homework import (
+    HomeworkAssignmentRepository,
+    HomeworkFileRepository,
+    HomeworkRepository,
+)
+from src.repositories.service import AuditLogRepository
+from src.repositories.user import UserRepository
 
 
 class HomeworkService:
@@ -30,13 +32,13 @@ class HomeworkService:
         actor: User,
         kind: HomeworkKind,
         title: str,
-        description: Optional[str],
+        description: str | None,
         max_score: int,
         subject_id: int,
-        exam_type_id: Optional[int],
-        lesson_id: Optional[int],
+        exam_type_id: int | None,
+        lesson_id: int | None,
         due_mode: str,  # next_lesson, fixed
-        due_at: Optional[datetime],
+        due_at: datetime | None,
         student_ids: list[int],
     ) -> Homework:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
@@ -69,10 +71,7 @@ class HomeworkService:
                 from src.repositories.schedule import LessonRepository
                 lessons_repo = LessonRepository(self.session)
                 next_lesson = await lessons_repo.get_next_for_student(student_id, utc_now())
-                if next_lesson:
-                    actual_due = next_lesson.start_at
-                else:
-                    actual_due = utc_now() + timedelta(days=7)
+                actual_due = next_lesson.start_at if next_lesson else utc_now() + timedelta(days=7)
 
             await self.assignments.create(
                 homework_id=hw.id,
@@ -97,7 +96,7 @@ class HomeworkService:
         student: User,
         assignment_id: int,
         file_keys: list[str],  # S3 keys
-        student_comment: Optional[str],
+        student_comment: str | None,
     ) -> HomeworkAssignment:
         assignment = await self.assignments.get(assignment_id)
         if not assignment:
@@ -117,7 +116,7 @@ class HomeworkService:
         if current_count + len(file_keys) > 10:
             raise BusinessRuleError("file_limit", "Можно загрузить до 10 файлов")
 
-        for key in file_keys:
+        for _key in file_keys:
             # File metadata should be stored separately after upload
             pass  # Files are uploaded via separate endpoint
 
@@ -140,7 +139,7 @@ class HomeworkService:
         self,
         student: User,
         assignment_id: int,
-        student_comment: Optional[str],
+        student_comment: str | None,
     ) -> HomeworkAssignment:
         assignment = await self.assignments.get(assignment_id)
         if not assignment or assignment.student_id != student.id:
@@ -165,7 +164,7 @@ class HomeworkService:
         actor: User,
         assignment_id: int,
         score: int,
-        comment: Optional[str],
+        comment: str | None,
         review_file_keys: list[str],
     ) -> HomeworkAssignment:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
@@ -209,7 +208,7 @@ class HomeworkService:
         actor: User,
         assignment_id: int,
         comment: str,
-        new_due_at: Optional[datetime] = None,
+        new_due_at: datetime | None = None,
     ) -> HomeworkAssignment:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
             raise PermissionDeniedError("return_for_revision")
@@ -230,7 +229,7 @@ class HomeworkService:
         self,
         actor: User,
         assignment_id: int,
-        new_due_at: Optional[datetime] = None,
+        new_due_at: datetime | None = None,
     ) -> HomeworkAssignment:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
             raise PermissionDeniedError("extend_deadline")

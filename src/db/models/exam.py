@@ -1,6 +1,8 @@
 """SQLAlchemy models for mock exams."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
@@ -9,14 +11,17 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.session import Base
+
+if TYPE_CHECKING:
+    from src.db.models.homework import HomeworkAssignment
+    from src.db.models.reference import ExamType
+    from src.db.models.users import User
 
 
 class MockExamResult(Base):

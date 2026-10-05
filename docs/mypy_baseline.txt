@@ -1,0 +1,174 @@
+# Базовый список ошибок `mypy --strict src` на момент S0.07 (155 шт., 68 файлов)
+#
+# По плану (docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md, S0.07) оставшиеся ошибки mypy
+# относятся к задачам S0.08/S0.12 и далее и отслеживаются как issues:
+#   Issue S0.07-mypy-A: отсутствие type annotations у хэндлеров/функций (no-untyped-def, 103 шт.)
+#       -> устраняется по мере реализации эндпоинтов (S1+) и инфраструктуры типов;
+#          массовая аннотация заглушек осознанно отложена (см. требование S0.07 «не добавлять функций»).
+#   Issue S0.07-mypy-B: ошибки в слоях services/repositories/db (attr-defined, union-attr,
+#       comparison-overlap, import-not-found, taskiq API) — реальные баги логики,
+#       чинятся в задачах соответствующих модулей (auth/homework/exam/schedule/stats, worker).
+#   Issue S0.07-mypy-C: Missing type arguments for generic type (dict/list) — 15 шт.,
+#       исправляются вместе с приведением pyproject/mypy-конфига (S0.08) и моделей (S0.14+).
+# Плагин gh CLI недоступен (нет remote/auth), поэтому issues зафиксированы здесь.
+# Обновлять файл прогоном: mypy --strict src 2>&1 | grep "error:" > docs/mypy_baseline.txt
+# UPDATE (clean-up pass): worker-модули приведены к taskiq 0.13 API:
+#   - taskiq.schedule.cron_schedule удалён из taskiq -> расписания объявлены списками ScheduledTask-dict ({"cron": ...});
+#   - TaskiqWorker/TaskiqScheduler больше не импортируются (worker/scheduler запускаются CLI `taskiq worker|scheduler`), get_worker/get_scheduler возвращают broker (TODO S0.12);
+#   - снятые из baseline ошибки: import-not-found (taskiq.schedule) и attr-defined в src/worker/* (4 шт., 155->154).
+
+mypy --strict: src/repositories/__init__.py:20: error: Function is missing a type annotation
+mypy --strict: src/repositories/__init__.py:25: error: Function is missing a type annotation
+mypy --strict: src/repositories/__init__.py:30: error: Function is missing a type annotation
+mypy --strict: src/repositories/__init__.py:36: error: Function is missing a type annotation
+mypy --strict: src/repositories/__init__.py:42: error: Function is missing a type annotation
+mypy --strict: src/schemas/user.py:26: error: Missing type arguments for generic type "dict" 
+mypy --strict: src/schemas/schedule.py:70: error: Missing type arguments for generic type
+mypy --strict: src/schemas/common.py:20: error: Missing type arguments for generic type "dict"
+mypy --strict: src/services/file.py:9: error: Function is missing a return type annotation 
+mypy --strict: src/db/session.py:30: error: The return type of an async generator function
+mypy --strict: src/core/security.py:21: error: Missing type arguments for generic type "dict" 
+mypy --strict: src/core/logging.py:16: error: Module "pythonjsonlogger.jsonlogger" does not
+mypy --strict: src/db/models/reference.py:38: error: Missing type arguments for generic type
+mypy --strict: src/bot/middlewares.py:20: error: Incompatible types in assignment (expression
+mypy --strict: src/api/webhook.py:13: error: Function is missing a return type annotation 
+mypy --strict: src/api/health.py:9: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:14: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:24: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:34: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:45: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:55: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:65: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:75: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:84: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/student.py:93: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/files.py:14: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:14: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:29: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:39: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:44: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:49: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:54: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:59: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:64: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:69: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:74: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:79: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:88: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:93: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:98: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:103: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:108: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:113: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:126: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:131: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:136: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:141: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:146: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:151: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:156: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:161: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:166: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:171: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:176: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:181: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:186: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:191: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:196: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:201: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:206: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:217: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:222: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:227: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:232: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:237: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:242: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:247: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:255: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:260: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:265: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:270: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:275: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:280: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:285: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:290: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:299: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:307: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/admin.py:315: error: Function is missing a return type annotation 
+mypy --strict: src/services/catalog.py:37: error: Function is missing a type annotation for
+mypy --strict: src/db/models/service.py:32: error: Missing type arguments for generic type
+mypy --strict: src/db/models/service.py:57: error: Missing type arguments for generic type
+mypy --strict: src/bot/handlers/__init__.py:30: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:43: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:50: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:52: error: Item "None" of "str | None" has no
+mypy --strict: src/bot/handlers/__init__.py:58: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:67: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:74: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:84: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:93: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:107: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:117: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:120: error: Item "InaccessibleMessage" of
+mypy --strict: src/bot/handlers/__init__.py:120: error: Item "None" of
+mypy --strict: src/bot/handlers/__init__.py:125: error: Function is missing a return type
+mypy --strict: src/bot/handlers/__init__.py:127: error: Item "InaccessibleMessage" of
+mypy --strict: src/bot/handlers/__init__.py:127: error: Item "None" of
+mypy --strict: src/repositories/service.py:42: error: Missing type arguments for generic type
+mypy --strict: src/bot/__init__.py:24: error: Function is missing a return type annotation 
+mypy --strict: src/worker/broker.py:20: error: Missing positional argument "sources" in call
+mypy --strict: src/services/notification.py:25: error: Missing type arguments for generic type
+mypy --strict: src/services/notification.py:36: error: Incompatible return value type (got
+mypy --strict: src/services/notification.py:70: error: Missing type arguments for generic type
+mypy --strict: src/services/stats.py:28: error: Missing type arguments for generic type "dict"
+mypy --strict: src/services/stats.py:45: error: Need type annotation for "not_submitted"
+mypy --strict: src/services/stats.py:48: error: Need type annotation for "unmarked" (hint:
+mypy --strict: src/services/stats.py:51: error: Need type annotation for "upcoming_deadlines"
+mypy --strict: src/services/stats.py:78: error: Missing type arguments for generic type "dict"
+mypy --strict: src/services/stats.py:104: error: Missing type arguments for generic type
+mypy --strict: src/services/stats.py:118: error: Need type annotation for "weekly_avg" (hint:
+mypy --strict: src/services/exam.py:40: error: "Coroutine[Any, Any, list[GradeScale]]" has no
+mypy --strict: src/services/exam.py:105: error: Incompatible return value type (got "None",
+mypy --strict: src/services/exam.py:108: error: Incompatible return value type (got "None",
+mypy --strict: src/services/exam.py:112: error: Incompatible return value type (got "None",
+mypy --strict: src/services/exam.py:114: error: "Homework" has no attribute "max_primary" 
+mypy --strict: src/services/exam.py:121: error: "Homework" has no attribute "max_primary" 
+mypy --strict: src/worker/tasks/__init__.py:3: error: Cannot find implementation or library
+mypy --strict: src/worker/tasks/__init__.py:11: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:17: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:22: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:27: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:32: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:37: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:42: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:47: error: Function is missing a return type
+mypy --strict: src/worker/tasks/__init__.py:52: error: Function is missing a return type
+mypy --strict: src/services/staff.py:80: error: "AuthService" has no attribute
+mypy --strict: src/services/schedule.py:163: error: Missing type arguments for generic type
+mypy --strict: src/services/schedule.py:234: error:
+mypy --strict: src/services/schedule.py:276: error: Incompatible types in assignment
+mypy --strict: src/services/schedule.py:284: error: "ScheduleTemplate" has no attribute
+mypy --strict: src/services/schedule.py:292: error: Incompatible types in assignment
+mypy --strict: src/api/deps.py:40: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/auth.py:22: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/auth.py:56: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/auth.py:89: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/auth.py:96: error: Function is missing a return type annotation 
+mypy --strict: src/api/v1/auth.py:103: error: Function is missing a return type annotation 
+mypy --strict: src/services/homework.py:73: error: "LessonRepository" has no attribute
+mypy --strict: src/services/homework.py:111: error: Non-overlapping equality check (left
+mypy --strict: src/services/homework.py:151: error: Non-overlapping equality check (left
+mypy --strict: src/services/homework.py:254: error: "LessonRepository" has no attribute
+mypy --strict: src/services/homework.py:263: error:
+mypy --strict: src/services/student.py:64: error:
+mypy --strict: src/services/student.py:77: error: Function is missing a type annotation for
+mypy --strict: src/services/student.py:110: error:
+mypy --strict: src/services/student.py:114: error:
+mypy --strict: src/services/student.py:138: error: "AuthService" has no attribute
+mypy --strict: src/services/student.py:184: error: Missing type arguments for generic type
+mypy --strict: src/api/v1/reference.py:16: error: Function is missing a return type annotation
+mypy --strict: src/api/v1/reference.py:23: error: Function is missing a return type annotation
+mypy --strict: src/api/v1/reference.py:30: error: Function is missing a return type annotation
+mypy --strict: src/worker/scheduler.py:12: error: Missing positional argument "sources" in
+mypy --strict: src/worker/__init__.py:3: error: Module "taskiq" has no attribute
+mypy --strict: src/main.py:16: error: Function is missing a return type annotation 

@@ -1,13 +1,13 @@
 """SQLAlchemy models for homework."""
 
-import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Integer,
@@ -16,10 +16,18 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.core.enums import FileRole, HomeworkKind, HomeworkStatus
 from src.db.session import Base
-from src.core.enums import HomeworkKind, HomeworkStatus, FileRole
+
+if TYPE_CHECKING:
+    from src.db.models.exam import MockExamResult
+    from src.db.models.schedule import Lesson
+    from src.db.models.users import User
 
 
 class Homework(Base):

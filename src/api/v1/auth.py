@@ -1,13 +1,19 @@
 """Auth API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import get_session
-from src.services.auth import AuthService
-from src.schemas.auth import TelegramAuthRequest, LinkAuthRequest, MeResponse, InvitationCreateResponse
 from src.core.config import settings
-from src.core.exceptions import BusinessRuleError, NotFoundError
+from src.core.exceptions import BusinessRuleError
+from src.db.session import get_session
+from src.schemas.auth import (
+    LinkAuthRequest,
+    MeResponse,
+    TelegramAuthRequest,
+)
+from src.services.auth import AuthService
 
 router = APIRouter()
 
@@ -16,7 +22,7 @@ router = APIRouter()
 async def auth_telegram(
     request: TelegramAuthRequest,
     response: Response,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Authenticate via Telegram Mini App initData."""
     auth = AuthService(session)
@@ -50,14 +56,14 @@ async def auth_telegram(
 async def auth_link(
     request: LinkAuthRequest,
     response: Response,
-    session: AsyncSession = Depends(get_session),
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     """Authenticate via one-time web login link."""
     auth = AuthService(session)
     try:
         user = await auth.consume_web_login(request.token)
     except BusinessRuleError as e:
-        raise HTTPException(status_code=401, detail=e.message)
+        raise HTTPException(status_code=401, detail=e.message) from e
 
     session_id = "stub-session-id"
     response.set_cookie(
@@ -80,20 +86,20 @@ async def auth_link(
 
 
 @router.post("/auth/logout")
-async def auth_logout(response: Response, session: AsyncSession = Depends(get_session)):
+async def auth_logout(response: Response, session: Annotated[AsyncSession, Depends(get_session)]):
     """Logout: delete session."""
     response.delete_cookie("session_id", path="/")
     return {"ok": True}
 
 
 @router.get("/me", response_model=MeResponse)
-async def get_me(session: AsyncSession = Depends(get_session)):
+async def get_me(session: Annotated[AsyncSession, Depends(get_session)]):
     """Get current user from session."""
     # TODO: Get user from session cookie
     raise HTTPException(status_code=401, detail="Not implemented")
 
 
 @router.patch("/me", response_model=MeResponse)
-async def update_me(session: AsyncSession = Depends(get_session)):
+async def update_me(session: Annotated[AsyncSession, Depends(get_session)]):
     """Update current user profile (timezone, display_name)."""
     raise HTTPException(status_code=401, detail="Not implemented")

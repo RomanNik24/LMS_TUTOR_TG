@@ -1,21 +1,20 @@
 """API dependencies: auth, rate limiting."""
 
-from typing: Optional
-from fastapi import Depends, HTTPException, Request, Cookie
+from typing import Annotated
+
+from fastapi import Cookie, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.session import get_session
-from src.core.config import settings
-from src.core.exceptions import UnauthorizedError, PermissionDeniedError
-from src.services.auth import AuthService
-from src.db.models.users import User
 from src.core.enums import UserRole
+from src.db.models.users import User
+from src.db.session import get_session
+from src.services.auth import AuthService
 
 
 async def get_current_user(
     request: Request,
-    session: AsyncSession = Depends(get_session),
-    session_id: Optional[str] = Cookie(None, alias="session_id"),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    session_id: Annotated[str | None, Cookie(alias="session_id")] = None,
 ) -> User:
     """Get current user from session cookie."""
     if not session_id:
@@ -26,7 +25,7 @@ async def get_current_user(
     try:
         user_id = int(session_id)
     except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid session")
+        raise HTTPException(status_code=401, detail="Invalid session") from None
 
     auth_service = AuthService(session)
     user = await auth_service.users.get(user_id)
@@ -40,7 +39,7 @@ async def get_current_user(
 
 def require_role(*allowed_roles: UserRole):
     """Dependency to require specific role."""
-    def checker(user: User = Depends(get_current_user)) -> User:
+    def checker(user: Annotated[User, Depends(get_current_user)]) -> User:
         if user.role not in allowed_roles:
             raise HTTPException(status_code=403, detail="Permission denied")
         return user

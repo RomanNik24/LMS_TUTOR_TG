@@ -1,20 +1,19 @@
 """Exam repository."""
 
-from typing import Optional
-from datetime import date
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories import BaseRepository
 from src.db.models.exam import MockExamResult
 from src.db.models.reference import ExamType, GradeScale
+from src.repositories import BaseRepository
 
 
 class MockExamResultRepository(BaseRepository[MockExamResult]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, MockExamResult)
 
-    async def get_for_student(self, student_id: int, exam_type_id: Optional[int] = None) -> list[MockExamResult]:
+    async def get_for_student(self, student_id: int, exam_type_id: int | None = None) -> list[MockExamResult]:
         stmt = select(MockExamResult).where(MockExamResult.student_id == student_id)
         if exam_type_id:
             stmt = stmt.where(MockExamResult.exam_type_id == exam_type_id)
@@ -28,7 +27,7 @@ class ExamTypeRepository(BaseRepository[ExamType]):
         super().__init__(session, ExamType)
 
     async def get_active(self) -> list[ExamType]:
-        stmt = select(ExamType).where(ExamType.is_active == True)
+        stmt = select(ExamType).where(ExamType.is_active)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

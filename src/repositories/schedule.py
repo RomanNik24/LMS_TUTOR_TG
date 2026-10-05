@@ -1,13 +1,13 @@
 """Schedule repository."""
 
-from typing import Optional
 from datetime import datetime
-from sqlalchemy import select, and_
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.enums import LessonStatus
+from src.db.models.schedule import Lesson, LessonParticipant, ScheduleTemplate
 from src.repositories import BaseRepository
-from src.db.models.schedule import ScheduleTemplate, ScheduleTemplateParticipant, Lesson, LessonParticipant
-from src.core.enums import LessonStatus, AttendanceStatus
 
 
 class ScheduleTemplateRepository(BaseRepository[ScheduleTemplate]):
@@ -17,7 +17,7 @@ class ScheduleTemplateRepository(BaseRepository[ScheduleTemplate]):
     async def get_active_for_teacher(self, teacher_id: int) -> list[ScheduleTemplate]:
         stmt = select(ScheduleTemplate).where(
             ScheduleTemplate.teacher_id == teacher_id,
-            ScheduleTemplate.is_active == True,
+            ScheduleTemplate.is_active,
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

@@ -1,12 +1,13 @@
 """Catalog service."""
 
-from typing: Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.catalog import CatalogRepository
-from src.core.exceptions import NotFoundError, PermissionDeniedError
 from src.core.enums import UserRole
+from src.core.exceptions import NotFoundError, PermissionDeniedError
 from src.db.models.reference import CatalogItem
+from src.db.models.users import User
+from src.repositories.catalog import CatalogRepository
 
 
 class CatalogService:
@@ -20,7 +21,7 @@ class CatalogService:
     async def list_all(self) -> list[CatalogItem]:
         return await self.catalog.get_all_ordered()
 
-    async def create(self, actor: User, title: str, description: str, price_text: Optional[str], sort_order: int) -> CatalogItem:
+    async def create(self, actor: User, title: str, description: str, price_text: str | None, sort_order: int) -> CatalogItem:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
             raise PermissionDeniedError("create_catalog")
         item = await self.catalog.create(

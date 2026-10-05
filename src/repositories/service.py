@@ -1,13 +1,12 @@
 """Notification and audit repositories."""
 
-from typing import Optional
-from datetime import datetime
-from sqlalchemy import select, and_
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories import BaseRepository
-from src.db.models.service import Notification, AuditLog
 from src.core.enums import NotificationStatus
+from src.db.models.service import AuditLog, Notification
+from src.repositories import BaseRepository
 
 
 class NotificationRepository(BaseRepository[Notification]):
@@ -39,9 +38,9 @@ class AuditLogRepository(BaseRepository[AuditLog]):
         self,
         action: str,
         entity_type: str,
-        entity_id: Optional[int] = None,
+        entity_id: int | None = None,
         data: dict | None = None,
-        actor_user_id: Optional[int] = None,
+        actor_user_id: int | None = None,
     ) -> AuditLog:
         return await self.create(
             action=action,

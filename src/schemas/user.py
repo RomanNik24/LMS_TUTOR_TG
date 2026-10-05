@@ -1,7 +1,7 @@
 """Pydantic schemas for users."""
 
 from datetime import datetime
-from typing: Optional, List
+
 from pydantic import BaseModel, Field
 
 
@@ -31,37 +31,37 @@ class ExamTypeResponse(BaseModel):
 
 
 class StudentProfileBase(BaseModel):
-    school_class: Optional[int] = None
+    school_class: int | None = None
     timezone: str = "Europe/Moscow"
-    video_url: Optional[str] = None
-    board_url: Optional[str] = None
-    teacher_notes: Optional[str] = None
+    video_url: str | None = None
+    board_url: str | None = None
+    teacher_notes: str | None = None
     lesson_price: int = 0
 
 
 class StudentCreateRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=150)
-    school_class: Optional[int] = None
-    subject_ids: List[int] = []
+    school_class: int | None = None
+    subject_ids: list[int] = []
     timezone: str = "Europe/Moscow"
-    video_url: Optional[str] = None
-    board_url: Optional[str] = None
-    teacher_notes: Optional[str] = None
+    video_url: str | None = None
+    board_url: str | None = None
+    teacher_notes: str | None = None
     lesson_price: int = 0
-    parent_contact: Optional[str] = None
+    parent_contact: str | None = None
 
 
 class StudentUpdateRequest(BaseModel):
-    display_name: Optional[str] = Field(None, min_length=1, max_length=150)
-    school_class: Optional[int] = None
-    subject_ids: Optional[List[int]] = None
-    timezone: Optional[str] = None
-    video_url: Optional[str] = None
-    board_url: Optional[str] = None
-    teacher_notes: Optional[str] = None
-    lesson_price: Optional[int] = None
-    parent_contact: Optional[str] = None
-    is_active: Optional[bool] = None
+    display_name: str | None = Field(None, min_length=1, max_length=150)
+    school_class: int | None = None
+    subject_ids: list[int] | None = None
+    timezone: str | None = None
+    video_url: str | None = None
+    board_url: str | None = None
+    teacher_notes: str | None = None
+    lesson_price: int | None = None
+    parent_contact: str | None = None
+    is_active: bool | None = None
 
 
 class StudentResponse(BaseModel):
@@ -69,10 +69,10 @@ class StudentResponse(BaseModel):
     display_name: str
     timezone: str
     is_active: bool
-    archived_at: Optional[datetime]
+    archived_at: datetime | None
     bot_blocked: bool
-    last_seen_at: Optional[datetime]
-    profile: Optional[StudentProfileBase] = None
+    last_seen_at: datetime | None
+    profile: StudentProfileBase | None = None
 
     class Config:
         from_attributes = True
@@ -80,26 +80,26 @@ class StudentResponse(BaseModel):
 
 class StudentCardOwnerResponse(StudentResponse):
     lesson_price: int
-    teacher_notes: Optional[str] = None
+    teacher_notes: str | None = None
 
 
 class StaffCreateRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=150)
     role: str  # owner, manager
-    telegram_id: Optional[int] = None
+    telegram_id: int | None = None
 
 
 class StaffUpdateRequest(BaseModel):
-    display_name: Optional[str] = None
-    role: Optional[str] = None
+    display_name: str | None = None
+    role: str | None = None
 
 
 class StaffResponse(BaseModel):
     id: int
     display_name: str
     role: str
-    telegram_id: Optional[int]
-    telegram_username: Optional[str]
+    telegram_id: int | None
+    telegram_username: str | None
     is_active: bool
 
     class Config:

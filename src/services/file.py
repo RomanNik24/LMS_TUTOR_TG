@@ -1,8 +1,6 @@
 """File service: S3 upload, presigned URLs."""
 
-from typing: Optional
 import uuid
-from datetime: timedelta
 
 from src.core.config import settings
 
@@ -25,9 +23,8 @@ class FileService:
         # Compress images
         # Generate UUID key
         ext = original_name.split(".")[-1].lower()
-        s3_key = f"{folder}/{uuid.uuid4()}.{ext}"
         # Upload to S3
-        return s3_key
+        return f"{folder}/{uuid.uuid4()}.{ext}"
 
     async def get_presigned_url(self, s3_key: str, ttl_seconds: int = 600) -> str:
         """Generate presigned URL for reading."""
@@ -36,4 +33,3 @@ class FileService:
 
     async def delete_file(self, s3_key: str) -> None:
         """Delete file from S3."""
-        pass

@@ -1,7 +1,7 @@
 """Pydantic schemas for exams."""
 
 from datetime import date
-from typing: Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -11,15 +11,15 @@ class MockExamResultCreateRequest(BaseModel):
     exam_date: date
     primary_score: int = Field(..., ge=0)
     max_primary: int = Field(..., gt=0)
-    geometry_score: Optional[int] = None
-    comment: Optional[str] = None
+    geometry_score: int | None = None
+    comment: str | None = None
 
 
 class MockExamResultUpdateRequest(BaseModel):
-    primary_score: Optional[int] = Field(None, ge=0)
-    max_primary: Optional[int] = Field(None, gt=0)
-    geometry_score: Optional[int] = None
-    comment: Optional[str] = None
+    primary_score: int | None = Field(None, ge=0)
+    max_primary: int | None = Field(None, gt=0)
+    geometry_score: int | None = None
+    comment: str | None = None
 
 
 class MockExamResultResponse(BaseModel):
@@ -29,11 +29,11 @@ class MockExamResultResponse(BaseModel):
     exam_date: date
     primary_score: int
     max_primary: int
-    geometry_score: Optional[int]
-    converted_value: Optional[int]
-    scale_year: Optional[int]
-    assignment_id: Optional[int]
-    comment: Optional[str]
+    geometry_score: int | None
+    converted_value: int | None
+    scale_year: int | None
+    assignment_id: int | None
+    comment: str | None
 
     class Config:
         from_attributes = True

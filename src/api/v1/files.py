@@ -1,5 +1,7 @@
 """Files API endpoints."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +11,7 @@ router = APIRouter()
 
 
 @router.get("/files/{file_id}/url")
-async def get_file_url(file_id: int, session: AsyncSession = Depends(get_session)):
+async def get_file_url(file_id: int, session: Annotated[AsyncSession, Depends(get_session)]):
     """Get presigned URL for file access."""
     # TODO: Check permissions, generate presigned URL
     return {"url": "https://s3.example.com/presigned-url", "expires_in": 600}

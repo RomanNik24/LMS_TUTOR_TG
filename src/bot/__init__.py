@@ -1,13 +1,10 @@
 """Bot setup and command registration."""
 
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 
 from src.bot.client import create_bot, create_dispatcher
-from src.bot.middlewares import AuthMiddleware
 from src.bot.handlers import router as handlers_router
-from src.core.config import settings
+from src.bot.middlewares import AuthMiddleware
 
 
 def setup_bot() -> tuple[Bot, Dispatcher]:
@@ -26,7 +23,7 @@ def setup_bot() -> tuple[Bot, Dispatcher]:
 
 async def set_bot_commands(bot: Bot):
     """Register bot commands with scopes."""
-    from aiogram.types import BotCommand, BotCommandScopeChat
+    from aiogram.types import BotCommand  # noqa: F401 (TODO: role scopes)
 
     # TODO: Set commands per role using BotCommandScopeChat
     # For now, set default commands

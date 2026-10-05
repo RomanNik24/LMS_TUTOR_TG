@@ -1,21 +1,24 @@
 """Schedule service: lessons, templates, generation."""
 
-from datetime import datetime, timedelta, time
-from typing import Optional
+from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.schedule import ScheduleTemplateRepository, LessonRepository, LessonParticipantRepository
-from src.repositories.user import UserRepository
-from src.repositories.service import AuditLogRepository
-from src.services.auth import AuthService
-from src.core.exceptions import NotFoundError, PermissionDeniedError, BusinessRuleError
-from src.core.enums import UserRole, LessonStatus, AttendanceStatus
-from src.db.models.schedule import ScheduleTemplate, ScheduleTemplateParticipant, Lesson, LessonParticipant
-from src.db.models.users import User
+from src.core.enums import AttendanceStatus, LessonStatus, UserRole
+from src.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
 from src.core.timeutils import utc_now
+from src.db.models.schedule import Lesson, ScheduleTemplate, ScheduleTemplateParticipant
+from src.db.models.users import User
+from src.repositories.schedule import (
+    LessonParticipantRepository,
+    LessonRepository,
+    ScheduleTemplateRepository,
+)
+from src.repositories.service import AuditLogRepository
+from src.repositories.user import UserRepository
+from src.services.auth import AuthService
 
 
 class ScheduleService:
@@ -36,9 +39,9 @@ class ScheduleService:
         start_at: datetime,
         end_at: datetime,
         student_ids: list[int],
-        video_url_override: Optional[str] = None,
-        board_url_override: Optional[str] = None,
-        topic: Optional[str] = None,
+        video_url_override: str | None = None,
+        board_url_override: str | None = None,
+        topic: str | None = None,
     ) -> Lesson:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
             raise PermissionDeniedError("create_lesson")
@@ -206,7 +209,7 @@ class ScheduleService:
         duration_minutes: int,
         timezone: str,
         starts_on: datetime,
-        ends_on: Optional[datetime],
+        ends_on: datetime | None,
         student_ids: list[int],
     ) -> ScheduleTemplate:
         if actor.role not in (UserRole.OWNER, UserRole.MANAGER):
@@ -236,10 +239,9 @@ class ScheduleService:
 
     async def generate_lessons(self, horizon_weeks: int = 4) -> int:
         """Generate lessons from active templates. Returns count created."""
-        from src.core.config import settings
         templates = await self.templates.get_active_for_teacher(0)  # Get all active templates
         # Actually we need all active templates regardless of teacher
-        stmt = select(ScheduleTemplate).where(ScheduleTemplate.is_active == True)
+        stmt = select(ScheduleTemplate).where(ScheduleTemplate.is_active)
         result = await self.session.execute(stmt)
         templates = list(result.scalars().all())
 

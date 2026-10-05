@@ -1,29 +1,36 @@
 """Bot handlers."""
 
-from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 
 from src.bot.keyboards import (
-    get_guest_keyboard, get_student_keyboard, get_staff_keyboard,
-    get_catalog_keyboard, get_confirm_keyboard,
+    get_catalog_keyboard,
+    get_confirm_keyboard,
+    get_guest_keyboard,
+    get_staff_keyboard,
+    get_student_keyboard,
 )
-from src.bot.states import ConfirmRelinkState, LogoutState
+from src.bot.states import LogoutState
 from src.core.texts import (
-    GUEST_WELCOME, CATALOG_EMPTY, student_welcome,
-    BOT_COMMANDS_GUEST, BOT_COMMANDS_STUDENT, BOT_COMMANDS_STAFF,
+    BOT_COMMANDS_GUEST,
+    BOT_COMMANDS_STAFF,
+    BOT_COMMANDS_STUDENT,
+    CATALOG_EMPTY,
+    GUEST_WELCOME,
+    student_welcome,
 )
-
+from src.db.models.users import User
 
 router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, current_user: User | None = None):
     """Handle /start and /start inv_<token>"""
     # TODO: Extract invite token and handle invitation
-    user = message.conf.get("current_user")
+    user = current_user
     if not user:
         await message.answer(GUEST_WELCOME, reply_markup=get_guest_keyboard())
     elif user.role == "student":
@@ -42,15 +49,15 @@ async def show_catalog(message: Message):
 @router.callback_query(F.data.startswith("catalog_"))
 async def catalog_page(callback: CallbackQuery):
     """Handle catalog pagination."""
-    page = int(callback.data.split("_")[1])
+    callback.data.split("_")[1]  # noqa: B018  # TODO: использовать пагинацию на этапе каталога
     # TODO: Fetch and show catalog page
     await callback.answer()
 
 
 @router.message(Command("app"))
-async def cmd_app(message: Message):
+async def cmd_app(message: Message, current_user: User | None = None):  # noqa: ARG001
     """Open Mini App."""
-    user = message.conf.get("current_user")
+    user = current_user
     if not user:
         return
     # Keyboard with WebApp button is already in reply markup
@@ -64,9 +71,9 @@ async def cmd_web(message: Message):
 
 
 @router.message(Command("today"))
-async def cmd_today(message: Message):
+async def cmd_today(message: Message, current_user: User | None = None):
     """Show today's schedule."""
-    user = message.conf.get("current_user")
+    user = current_user
     if not user:
         return
     # TODO: Fetch and show today's lessons
@@ -74,18 +81,18 @@ async def cmd_today(message: Message):
 
 
 @router.message(Command("hw"))
-async def cmd_hw(message: Message):
+async def cmd_hw(message: Message, current_user: User | None = None):
     """Show homework (student) or review queue (staff)."""
-    user = message.conf.get("current_user")
+    user = current_user
     if not user:
         return
     await message.answer("Список ДЗ / Очередь на проверку будет здесь.")
 
 
 @router.message(Command("help"))
-async def cmd_help(message: Message):
+async def cmd_help(message: Message, current_user: User | None = None):
     """Show help."""
-    user = message.conf.get("current_user")
+    user = current_user
     if not user:
         cmds = BOT_COMMANDS_GUEST
     elif user.role == "student":

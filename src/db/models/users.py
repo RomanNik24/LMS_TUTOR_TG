@@ -1,24 +1,28 @@
 """SQLAlchemy models for users and authentication."""
 
-import enum
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
-    CheckConstraint,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     String,
     Text,
-    UniqueConstraint,
     func,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.core.enums import AuthTokenPurpose, UserRole
 from src.db.session import Base
-from src.core.enums import UserRole, AuthTokenPurpose
+
+if TYPE_CHECKING:
+    from src.db.models.reference import Subject
 
 
 class User(Base):

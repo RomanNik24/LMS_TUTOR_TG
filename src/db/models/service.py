@@ -1,7 +1,10 @@
 """SQLAlchemy models for notifications and audit log."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     DateTime,
@@ -10,12 +13,14 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.session import Base
+
+if TYPE_CHECKING:
+    from src.db.models.users import User
 
 
 class Notification(Base):
@@ -24,7 +29,7 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     type: Mapped[str] = mapped_column(String(50), nullable=False)
-    payload: Mapped[dict] = mapped_column(nullable=False)  # JSONB
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     dedup_key: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
     is_urgent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -49,7 +54,7 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    data: Mapped[dict] = mapped_column(default={}, nullable=False)  # JSONB
+    data: Mapped[dict] = mapped_column(JSON, default={}, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     actor: Mapped["User | None"] = relationship()

@@ -1,16 +1,15 @@
 """Auth service: invitations, sessions, Telegram auth."""
 
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.repositories.user import UserRepository, AuthTokenRepository
-from src.repositories.service import AuditLogRepository
+from src.core.enums import AuthTokenPurpose
+from src.core.exceptions import BusinessRuleError, NotFoundError
 from src.core.security import generate_token, hash_token, validate_telegram_init_data
-from src.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
-from src.core.enums import UserRole, AuthTokenPurpose
-from src.db.models.users import User, AuthToken
+from src.db.models.users import AuthToken, User
+from src.repositories.service import AuditLogRepository
+from src.repositories.user import AuthTokenRepository, UserRepository
 
 
 class AuthService:

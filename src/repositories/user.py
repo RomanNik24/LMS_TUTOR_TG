@@ -1,12 +1,11 @@
 """User repository."""
 
-from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.enums import AuthTokenPurpose, UserRole
+from src.db.models.users import AuthToken, Guardian, StudentProfile, User
 from src.repositories import BaseRepository
-from src.db.models.users import User, StudentProfile, Guardian, AuthToken
-from src.core.enums import UserRole, AuthTokenPurpose
 
 
 class UserRepository(BaseRepository[User]):
@@ -21,7 +20,7 @@ class UserRepository(BaseRepository[User]):
     async def get_students(self, teacher_id: int, active_only: bool = True) -> list[User]:
         stmt = select(User).where(User.role == UserRole.STUDENT)
         if active_only:
-            stmt = stmt.where(User.is_active == True)
+            stmt = stmt.where(User.is_active)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 

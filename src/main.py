@@ -1,11 +1,12 @@
 """Application entry point: FastAPI + Aiogram lifespan."""
 
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.v1 import router as api_v1_router
 from src.api.health import router as health_router
+from src.api.v1 import router as api_v1_router
 from src.api.webhook import router as webhook_router
 from src.core.config import settings
 from src.core.logging import setup_logging
