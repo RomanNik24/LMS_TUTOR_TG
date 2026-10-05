@@ -1,6 +1,9 @@
 # LOCAL_ENV — чек-лист локального окружения
 
-> Этап **S1.03** (проверка инструментов перед началом разработки).
+> Первоначально — этап **S1.03** (проверка инструментов перед началом разработки).
+> Обновлено 2026-10-05 после выполнения этапов **S0.08 – S0.11**: инфраструктура поднята,
+> найденные в §6 блокеры закрыты.
+>
 > Требование ТЗ: установленный dev-инструментарий, рабочий Docker, доступность Docker для `testcontainers`.
 
 - **Дата проверки:** 2026-10-05
@@ -25,7 +28,7 @@
 | 10 | `psql` | 18.3 | ДА | `C:\Program Files\PostgreSQL\18\bin\psql.exe`, добавлен в User `PATH` |
 | 11 | `pg_isready` | 18.3 | ДА | Там же. Отвечает `accepting connections` на `:5432` |
 | 12 | `redis-cli` | 7.4.11 | ДА | **Не нативно**, а через Docker: `docker compose exec redis redis-cli ping`. См. §5 |
-| 13 | `mc` (MinIO Client) | RELEASE.2025-08-13T08-35-41Z | ДА | `C:\Users\user\AppData\Local\Programs\MinIO\mc.exe`, добавлен в User `PATH`. См. §4 |
+| 13 | `mc` (MinIO Client) | RELEASE.2025-08-13T08-35-41Z | ДА | `C:\Users\user\AppData\Local\Programs\MinIO\mc.exe`, добавлен в User `PATH`. Используется как S3-клиент к SeaweedFS. См. §4, §6.3 |
 | 14 | `curl` | 8.21.0 (Windows, Schannel) | ДА | Встроен в Windows. В PowerShell — псевдоним `curl` → `Invoke-WebRequest`; для CLI-совместимости использовать `curl.exe` |
 | 15 | `jq` | 1.8.2 | ДА | Установлен через `winget` (`jqlang.jq`) |
 
@@ -110,47 +113,107 @@ uv run --python 3.11 --with testcontainers python tc_check.py
 
 - **`redis-cli` не ставится нативно.** В `winget` пакет `Redis.Redis` — это сборка **3.0.504 от 2016 года**, а ТЗ требует **Redis 7**. Инструмент доступен из контейнера той же версии, что и сервис: `docker compose exec redis redis-cli ping`. Проверено: `redis-cli 7.4.11`.
 - **`aws-cli` не ставится.** ТЗ формулирует пункт как «`mc` (MinIO client) **или** `aws-cli`» — требование закрыто вариантом `mc`.
-- **PostgreSQL 18.3 вместо 16.** ТЗ требует «PostgreSQL 16+», поэтому 18 подходит. Обратите внимание: хостовый PG 18 и контейнер `postgres:16` из `docker-compose.yml` конфликтуют по порту 5432 — см. §6, п. 1.
+- **PostgreSQL 18.3 вместо 16.** ТЗ требует «PostgreSQL 16+», поэтому 18 подходит. Хостовый PG 18 конфликтовал с контейнером `postgres:16` по порту 5432; служба `postgresql-x64-18` остановлена и переведена в режим запуска «Вручную» (см. §6, п. 1).
 
 ---
 
-## 6. Известные блокеры и находки
+## 6. Блокеры и находки: статус
 
-Всё из этого списка **не входило** в объём S1.03 и намеренно не исправлялось здесь — требует отдельных задач.
+### 6.1. Закрыто в S0.08 – S0.11
 
-1. **Конфликт портов: 5432 занят хостовым PostgreSQL 18, 6379 — контейнером чужого стека.** На машине уже работает посторонний стек `lms_tutor` (`lms_api`, `lms_bot`, `lms_worker`, `lms_webapp`, `lms_postgres` на **15432**, `lms_redis` на **6379**, проект запущен ~3 недели назад). `docker compose up -d postgres redis minio` из этого репозитория упадёт на биндинге 5432 и 6379.
-   Перед S3.03 нужно решить: либо остановить хостовый PG 18 и стек `lms_tutor`, либо убрать из `docker-compose.yml` `ports:` у `postgres` (внутри compose-сети имя сервиса уже работает без публикации порта).
-
-2. **`docker-compose.yml` содержит устаревший атрибут `version: "3.8"`.** Compose v5 печатает предупреждение:
-   `the attribute 'version' is obsolete, it will be ignored`. Поле можно удалить.
-
-3. **`pyproject.toml` не собирается как пакет.** Нет секции `[tool.hatch.build.targets.wheel]` с `packages`, поэтому `hatchling` не может определить состав дистрибутива:
+1. **Конфликт портов 5432 (хостовый PostgreSQL 18).** Служба `postgresql-x64-18` остановлена, тип запуска изменён на «Вручную». Порт 5432 освобождён и занят контейнером `postgres:16`.
+   Возврат к хостовому PG при необходимости:
+   ```powershell
+   Set-Service postgresql-x64-18 -StartupType Automatic; Start-Service postgresql-x64-18
    ```
-   ValueError: Unable to determine which files to ship inside the wheel
-   ```
-   Из-за этого не работает `uv run` / `uv sync` внутри репозитория. Нужно добавить `packages = ["src"]`.
+   Посторонний стек `lms_tutor`, ранее занимавший 6379, к моменту S0.11 уже был удалён — том `lms_tutor_postgres_data` сохранён.
 
-4. **`docker-compose.yml` ссылается на `Dockerfile` в корне, которого нет** (`app`, `worker`, `scheduler` используют `build: dockerfile: Dockerfile`). На `docker compose up` для сервисов приложения сборка упадёт.
+2. **`docker-compose.yml` содержал устаревший атрибут `version: "3.8"`.** Удалён из `docker-compose.yml` и `docker-compose.prod.yml`. Compose больше не печатает `the attribute 'version' is obsolete`.
+
+3. **`pyproject.toml` не собирался как пакет.** Устранено через `[tool.uv] package = false` (приложение запускается из исходников, сборка дистрибутива не требуется). Дополнительно: единый `[dependency-groups].dev`, настройки Ruff перенесены в `[tool.ruff.lint]`. `uv sync --frozen` и `uv run` работают.
+
+4. **Отсутствовал `Dockerfile` в корне.** Создан multi-stage образ бэкенда на `python:3.11-slim` + `uv 0.12.23`, непривилегированный пользователь `app` (uid 1001), `HEALTHCHECK` на `/health`, запуск `uvicorn src.manifest:app`. Добавлен `.dockerignore`.
+
+### 6.2. Отклонение от ТЗ: MinIO заменён на SeaweedFS
+
+ТЗ предписывает MinIO для локального S3. Образы `minio/minio` и `minio/mc` **удалены из Docker Hub в сентябре 2026**, а анонимный pull с `quay.io/minio` больше не работает:
+
+```
+Error response from daemon: pull access denied for minio/minio, repository does not exist or may require 'docker login'
+Error response from daemon: failed to resolve reference "quay.io/minio/minio:latest":
+  unexpected status from HEAD request to https://quay.io/v2/minio/minio/manifests/latest: 401 Unauthorized
+```
+
+Дополнительно: репозиторий MinIO CE архивирован (апрель 2026), образ заморожен на `RELEASE.2025-09-07` и содержит неисправленную CVE-2025-62506 (CVSS 8.1).
+
+**Решение:** в локальной разработке используется **SeaweedFS** (`chrislusf/seaweedfs:latest`, лицензия Apache-2.0) — S3-совместимый сервер в одном контейнере. Это не влияет на код приложения: он работает через S3 API, а в проде по ТЗ используется реальное хранилище (Timeweb/Selectel, см. `S3_ENDPOINT_URL` в `.env.example`).
+
+| Было | Стало |
+|---|---|
+| `minio/minio:latest`, S3 на `:9000`, UI на `:9001` | `chrislusf/seaweedfs:latest`, S3 на `:8333`, UI на `:8888` |
+| сервис `minio-init` на образе `minio/mc` | бакет создаётся локальным `mc` вручную (см. §6.3) |
+| `S3_ENDPOINT_URL=http://minio:9000` | `S3_ENDPOINT_URL=http://s3:8333` |
+
+Локальные креды остались `minioadmin` / `minioadmin` (значение по умолчанию, совпадает с `.env.local`); в проде они не используются.
+
+### 6.3. Создание бакета `lms-files`
+
+Одноразовый init-сервис на `minio/mc` больше невозможен, поэтому бакет создаётся локальным клиентом `mc`:
+
+```powershell
+mc alias set local-s3 http://localhost:8333 minioadmin minioadmin
+mc mb --ignore-existing local-s3/lms-files
+mc ls local-s3
+```
+
+### 6.4. Остаётся на будущее
 
 5. **Аутентификация Docker-контекста.** `docker context ls` показывает активный `desktop-linux`. Если демон перезапущен или WSL выключен, `docker` вернёт `failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine` — это признак незапущенного Docker Desktop, а не поломки установки.
 
+6. **Сервис `migrate` не запустится до S1.02.** В репозитории ещё нет `alembic.ini` и каталога `scripts`, поэтому команда `alembic upgrade head` завершится ошибкой. На S0.11 это не проверялось.
+
+7. **`frontend/package.json` фиксирует `pnpm@8.10.0`, установлен `pnpm 12.8.1`.** Расхождение закроется на S0.16 вместе с `pnpm-lock.yaml`.
+
+8. **`ruff format --check .` сообщает `30 files would be reformatted`.** Форматирование намеренно не смешивалось с инфраструктурными коммитами.
+
 ---
 
-## 7. Повторная проверка
+## 7. Текущее состояние стека
+
+`docker compose up -d postgres redis s3` — все три сервиса `healthy`:
+
+| Контейнер | Состояние | Проверка |
+|---|---|---|
+| `lms_tutor_tg-postgres-1` | `healthy` | `pg_isready -U postgres` → `accepting connections` |
+| `lms_tutor_tg-redis-1` | `healthy` | `redis-cli ping` → `PONG` |
+| `lms_tutor_tg-s3-1` | `healthy` | `mc ls local-s3` → `lms-files/` |
+
+Версия PostgreSQL в контейнере: `16.15 (Debian 16.15-1.pgdg13+2)`.
+Расширение `btree_gist` создано: `docker exec lms_tutor_tg-postgres-1 psql -U postgres -d lms -c "CREATE EXTENSION IF NOT EXISTS btree_gist;"`.
+
+Сервисы `app`, `worker`, `scheduler` и `migrate` намеренно не поднимаются: `migrate` требует `alembic.ini` (S1.02).
+
+---
+
+## 8. Повторная проверка
 
 ```powershell
 git --version; gh auth status; py -3.11 --version; uv --version
 node --version; corepack --version; pnpm --version
 docker version; docker compose version; docker info
-psql --version; pg_isready; jq --version; mc --version; curl.exe --version
+psql --version; jq --version; mc --version; curl.exe --version
 docker run --rm hello-world
+Get-Service postgresql-x64-18
+docker compose ps
 docker compose exec redis redis-cli ping
+docker exec lms_tutor_tg-postgres-1 pg_isready -U postgres
+mc ls local-s3
 ```
 
 ---
 
-## 8. Связанные документы
+## 9. Связанные документы
 
 - `docs/02_tech_stack.md` — целевые версии стека.
 - `docs/10_deployment_and_ops.md` — эксплуатация и запуск.
-- `docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md` — этап S1.03 (источник требований), этап S3.03 — развёртывание инфраструктуры.
+- `docs/MY_LMS_BUILD_PLAN_QWEN_OPENCODE.md` — этапы S0.08 – S0.11 и S1.03 (источник требований), S3.03 — развёртывание инфраструктуры.
